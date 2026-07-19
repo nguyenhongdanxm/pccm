@@ -1,5 +1,6 @@
 <?php
 require_once 'includes/functions.php';
+require_login();
 $assignments = get_assignments();
 header('Content-Type: text/csv; charset=utf-8');
 header('Content-Disposition: attachment; filename="phan_cong_' . date('Ymd') . '.csv"');
