@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Quản lý Lớp – PCCM{% endblock %}
+{% block content %}
+<h3 class="mb-4"><i class="bi bi-building"></i> Quản lý Lớp</h3>
+<div class="row">
+<div class="col-md-4 mb-4"><div class="card"><div class="card-header">Thêm lớp mới</div>
+<div class="card-body"><form method="post"><input type="hidden" name="action" value="add">
+<div class="mb-3"><input type="text" name="name" class="form-control" placeholder="Ví dụ: 8D, 10C" required></div>
+<button type="submit" class="btn btn-primary w-100">Thêm lớp</button></form></div></div></div>
+<div class="col-md-8"><div class="card"><div class="card-header">Danh sách lớp ({{ classes|length }})</div>
+<div class="card-body"><div class="d-flex flex-wrap gap-2">
+{% for c in classes %}
+<div class="badge bg-primary d-flex align-items-center gap-2 p-2" style="font-size:1rem">{{ c }}
+<form method="post" class="d-inline" onsubmit="return confirm('Xóa lớp {{ c }}?')">
+<input type="hidden" name="action" value="delete"><input type="hidden" name="name" value="{{ c }}">
+<button type="submit" class="btn-close btn-close-white" style="font-size:.6rem"></button></form></div>
+{% endfor %}
+</div></div></div></div></div>
+{% endblock %}
