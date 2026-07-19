@@ -1,5 +1,10 @@
 <?php
 require_once __DIR__ . '/config.php';
+
+// Tài khoản quản trị mặc định
+define('ADMIN_USER', 'admin');
+define('ADMIN_PASS', 'Xinman@2021');
+
 function load_json($file, $default = []) {
     if (file_exists($file)) {
         $data = json_decode(file_get_contents($file), true);
@@ -35,5 +40,29 @@ function show_flash() {
     }
 }
 function e($str) { return htmlspecialchars($str ?? '', ENT_QUOTES, 'UTF-8'); }
+
+// ===== AUTH =====
+function is_logged_in() {
+    return !empty($_SESSION['pccm_admin']);
+}
+function require_login() {
+    if (!is_logged_in()) {
+        flash('Vui lòng đăng nhập để sử dụng chức năng này.', 'warning');
+        header('Location: ' . BASE_URL . 'login.php');
+        exit;
+    }
+}
+function attempt_login($user, $pass) {
+    if ($user === ADMIN_USER && $pass === ADMIN_PASS) {
+        $_SESSION['pccm_admin'] = true;
+        return true;
+    }
+    return false;
+}
+function logout() {
+    unset($_SESSION['pccm_admin']);
+    session_destroy();
+}
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 init_data();
