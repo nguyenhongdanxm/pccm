@@ -1,6 +1,7 @@
 <?php
 $page_title = 'Danh sách phân công';
 require_once 'includes/functions.php';
+require_login();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $assignments = get_assignments();
@@ -15,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         save_json(ASSIGNMENTS_FILE, $assignments);
         flash('Đã xóa ' . count($ids) . ' phân công.', 'success');
     }
-    header('Location: danhsach.php');
+    header('Location: ' . BASE_URL . 'danhsach.php');
     exit;
 }
 
@@ -38,7 +39,7 @@ $all_classes = array_unique(array_column($assignments, 'class')); sort($all_clas
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0"><i class="bi bi-list-ul"></i> Danh sách phân công</h3>
-    <a href="them.php" class="btn btn-primary btn-sm"><i class="bi bi-plus"></i> Thêm mới</a>
+    <a href="<?= BASE_URL ?>them.php" class="btn btn-primary btn-sm"><i class="bi bi-plus"></i> Thêm mới</a>
 </div>
 
 <div class="card mb-3"><div class="card-body py-2">
@@ -56,7 +57,7 @@ $all_classes = array_unique(array_column($assignments, 'class')); sort($all_clas
         <?php foreach ($all_classes as $c): ?><option value="<?= e($c) ?>" <?= $f_class===$c?'selected':'' ?>><?= e($c) ?></option><?php endforeach; ?>
         </select></div>
     <div class="col-md-2"><button type="submit" class="btn btn-outline-primary btn-sm w-100">Lọc</button></div>
-    <div class="col-md-2"><a href="danhsach.php" class="btn btn-outline-secondary btn-sm w-100">Xóa lọc</a></div>
+    <div class="col-md-2"><a href="<?= BASE_URL ?>danhsach.php" class="btn btn-outline-secondary btn-sm w-100">Xóa lọc</a></div>
 </form></div></div>
 
 <?php if ($filtered): ?>
