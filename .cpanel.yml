@@ -1,7 +1,7 @@
 ---
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/capnachi/public_html/pccm/
+    - export DEPLOYPATH=/home/capnachi/noitruxinman.edu.vn/pccm/
     - /bin/mkdir -p $DEPLOYPATH
     - /bin/cp -R * $DEPLOYPATH
     - /bin/cp -R includes $DEPLOYPATH
