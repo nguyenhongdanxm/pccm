@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Tổng quan – PCCM{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0"><i class="bi bi-speedometer2"></i> Tổng quan Phân công 2026-2027</h3>
+</div>
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3"><div class="card stat-card"><div class="number">{{ teachers|length }}</div><div class="label">Giáo viên</div></div></div>
+    <div class="col-6 col-md-3"><div class="card stat-card"><div class="number">{{ subjects|length }}</div><div class="label">Môn học</div></div></div>
+    <div class="col-6 col-md-3"><div class="card stat-card"><div class="number">{{ classes|length }}</div><div class="label">Lớp</div></div></div>
+    <div class="col-6 col-md-3"><div class="card stat-card"><div class="number">{{ total_assignments }}</div><div class="label">Phân công</div></div></div>
+</div>
+{% if teacher_load %}
+<div class="card">
+    <div class="card-header"><i class="bi bi-people"></i> Tải dạy theo giáo viên</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead><tr><th>#</th><th>Giáo viên</th><th class="text-end">Tổng tiết</th><th style="width:40%">Biểu đồ</th></tr></thead>
+                <tbody>
+                    {% set max_load = teacher_load[0][1] if teacher_load else 1 %}
+                    {% for teacher, total in teacher_load %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ teacher }}</td>
+                        <td class="text-end fw-bold">{{ '%.1f'|format(total) }}</td>
+                        <td><div class="progress" style="height:18px"><div class="progress-bar bg-primary" style="width:{{ (total/max_load*100)|int }}%">{{ '%.1f'|format(total) }}</div></div></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info"><i class="bi bi-info-circle"></i> Chưa có phân công nào. <a href="{{ url_for('them') }}" class="alert-link">Thêm phân công ngay</a></div>
+{% endif %}
+{% endblock %}
