@@ -1,5 +1,7 @@
 <?php
 $page_title = 'Tổng quan';
+require_once 'includes/functions.php';
+require_login();
 require_once 'includes/header.php';
 $teachers = get_teachers();
 $subjects = get_subjects();
@@ -39,6 +41,6 @@ $max_load = $teacher_load ? max($teacher_load) : 1;
 <?php endforeach; ?>
 </tbody></table></div></div></div>
 <?php else: ?>
-<div class="alert alert-info"><i class="bi bi-info-circle"></i> Chưa có phân công nào. <a href="them.php" class="alert-link">Thêm phân công ngay</a></div>
+<div class="alert alert-info"><i class="bi bi-info-circle"></i> Chưa có phân công nào. <a href="<?= BASE_URL ?>them.php" class="alert-link">Thêm phân công ngay</a></div>
 <?php endif; ?>
 <?php require_once 'includes/footer.php'; ?>
