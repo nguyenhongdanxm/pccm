@@ -1,7 +1,10 @@
 <?php
 define('BASE_PATH', dirname(__DIR__));
 define('DATA_PATH', BASE_PATH . '/data');
+define('BASE_URL', '/pccm/');
+
 if (!is_dir(DATA_PATH)) mkdir(DATA_PATH, 0755, true);
+
 define('TEACHERS_FILE', DATA_PATH . '/teachers.json');
 define('SUBJECTS_FILE', DATA_PATH . '/subjects.json');
 define('CLASSES_FILE', DATA_PATH . '/classes.json');
