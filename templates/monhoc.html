@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Quản lý Môn học – PCCM{% endblock %}
+{% block content %}
+<h3 class="mb-4"><i class="bi bi-book"></i> Quản lý Môn học & Số tiết chuẩn</h3>
+<div class="alert alert-info"><i class="bi bi-info-circle"></i> Số tiết chuẩn được dùng để <strong>tự động điền</strong> khi bạn chọn Môn + Lớp.</div>
+<div class="row mb-4"><div class="col-md-4"><div class="card"><div class="card-header">Thêm môn mới</div>
+<div class="card-body"><form method="post"><input type="hidden" name="action" value="add">
+<div class="mb-3"><input type="text" name="name" class="form-control" placeholder="Tên môn học" required></div>
+<button type="submit" class="btn btn-primary w-100">Thêm môn</button></form></div></div></div></div>
+{% for subject, grades_data in subjects.items()|sort %}
+<div class="card mb-3"><div class="card-header">{{ subject }}</div>
+<div class="card-body"><form method="post" class="row g-2 align-items-end">
+<input type="hidden" name="action" value="update"><input type="hidden" name="subject" value="{{ subject }}">
+{% for g in grades %}
+<div class="col"><label class="form-label small">Khối {{ g }}</label>
+<input type="number" name="grade_{{ g }}" class="form-control form-control-sm" step="0.1" min="0" max="10" value="{{ grades_data.get(g, '') }}"></div>
+{% endfor %}
+<div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Lưu</button></div>
+</form></div></div>
+{% endfor %}
+{% endblock %}
