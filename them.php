@@ -1,6 +1,7 @@
 <?php
 $page_title = 'Thêm phân công';
 require_once 'includes/functions.php';
+require_login();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $assignments = get_assignments();
