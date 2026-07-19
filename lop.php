@@ -1,6 +1,7 @@
 <?php
 $page_title = 'Quản lý Lớp';
 require_once 'includes/functions.php';
+require_login();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $classes = get_classes();
     if ($_POST['action'] === 'add') {
@@ -22,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         save_json(CLASSES_FILE, $classes);
         flash("Đã xóa lớp: $name", 'success');
     }
-    header('Location: lop.php'); exit;
+    header('Location: ' . BASE_URL . 'lop.php'); exit;
 }
 require_once 'includes/header.php';
 $classes = get_classes();
