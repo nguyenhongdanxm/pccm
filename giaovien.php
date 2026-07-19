@@ -1,6 +1,7 @@
 <?php
 $page_title = 'Quản lý Giáo viên';
 require_once 'includes/functions.php';
+require_login();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $teachers = get_teachers();
     if ($_POST['action'] === 'add') {
@@ -19,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         save_json(TEACHERS_FILE, $teachers);
         flash("Đã xóa: $name", 'success');
     }
-    header('Location: giaovien.php'); exit;
+    header('Location: ' . BASE_URL . 'giaovien.php'); exit;
 }
 require_once 'includes/header.php';
 $teachers = get_teachers(); sort($teachers);
