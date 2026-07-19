@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Danh sách phân công – PCCM{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0"><i class="bi bi-list-ul"></i> Danh sách phân công</h3>
+    <a href="{{ url_for('them') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus"></i> Thêm mới</a>
+</div>
+<div class="card mb-3"><div class="card-body py-2">
+<form method="get" class="row g-2 align-items-end">
+<div class="col-md-3"><label class="form-label small mb-0">Giáo viên</label>
+<select name="teacher" class="form-select form-select-sm"><option value="">Tất cả</option>
+{% for t in teachers %}<option value="{{ t }}" {% if f_teacher == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+<div class="col-md-3"><label class="form-label small mb-0">Môn học</label>
+<select name="subject" class="form-select form-select-sm"><option value="">Tất cả</option>
+{% for s in subjects %}<option value="{{ s }}" {% if f_subject == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></div>
+<div class="col-md-2"><label class="form-label small mb-0">Lớp</label>
+<select name="class" class="form-select form-select-sm"><option value="">Tất cả</option>
+{% for c in classes %}<option value="{{ c }}" {% if f_class == c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+<div class="col-md-2"><button type="submit" class="btn btn-outline-primary btn-sm w-100">Lọc</button></div>
+<div class="col-md-2"><a href="{{ url_for('danhsach') }}" class="btn btn-outline-secondary btn-sm w-100">Xóa lọc</a></div>
+</form></div></div>
+{% if assignments %}
+<form method="post" action="{{ url_for('xoa_nhieu') }}" id="form-xoa">
+<div class="card"><div class="card-body p-0"><div class="table-responsive">
+<table class="table table-hover table-striped mb-0">
+<thead><tr><th width="40"><input type="checkbox" id="check-all"></th><th>Giáo viên</th><th>Môn học</th><th>Lớp</th><th class="text-center">Số tiết</th><th>Ghi chú</th><th width="80"></th></tr></thead>
+<tbody>
+{% for a in assignments %}
+<tr>
+<td><input type="checkbox" name="ids" value="{{ a.id }}" class="check-item"></td>
+<td>{{ a.teacher }}</td><td>{{ a.subject }}</td>
+<td><span class="badge bg-secondary">{{ a.class }}</span></td>
+<td class="text-center"><span class="badge badge-periods">{{ a.periods }}</span></td>
+<td class="text-muted small">{{ a.note or '' }}</td>
+<td><form method="post" action="{{ url_for('xoa', aid=a.id) }}" class="d-inline" onsubmit="return confirm('Xóa?')">
+<button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button></form></td>
+</tr>{% endfor %}
+</tbody></table></div></div>
+<div class="card-footer d-flex justify-content-between">
+<span class="text-muted small">Tổng: {{ assignments|length }} phân công</span>
+<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Xóa các mục đã chọn?')"><i class="bi bi-trash"></i> Xóa đã chọn</button>
+</div></div></form>
+{% else %}
+<div class="alert alert-info">Không có dữ liệu phù hợp.</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>document.getElementById('check-all')?.addEventListener('change', function() {
+document.querySelectorAll('.check-item').forEach(cb => cb.checked = this.checked);});</script>
+{% endblock %}
