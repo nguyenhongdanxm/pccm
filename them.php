@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 flash("Đã thêm: $teacher dạy $subject lớp $class_name ($periods tiết)", 'success');
             }
         }
-        header('Location: them.php');
+        header('Location: ' . BASE_URL . 'them.php');
         exit;
     }
 
@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             save_json(ASSIGNMENTS_FILE, $assignments);
             flash("Đã thêm $added phân công mới.", 'success');
         }
-        header('Location: danhsach.php');
+        header('Location: ' . BASE_URL . 'danhsach.php');
         exit;
     }
 }
@@ -191,7 +191,7 @@ function fetchPeriods() {
         periodsManualWrap.classList.add('d-none');
         return;
     }
-    fetch('api/periods.php?subject=' + encodeURIComponent(subject) + '&class=' + encodeURIComponent(cls))
+    fetch('<?= BASE_URL ?>api/periods.php?subject=' + encodeURIComponent(subject) + '&class=' + encodeURIComponent(cls))
         .then(r => r.json())
         .then(data => {
             if (data.periods !== null && data.periods !== undefined) {
