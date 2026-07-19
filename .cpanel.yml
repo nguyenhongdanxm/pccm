@@ -2,7 +2,4 @@
 deployment:
   tasks:
     - export DEPLOYPATH=/home/capnachi/noitruxinman.edu.vn/pccm/
-    - /bin/mkdir -p $DEPLOYPATH
-    - /bin/cp -Rf * $DEPLOYPATH
-    - /bin/chmod -R 755 $DEPLOYPATH
-    - /bin/chmod 777 $DEPLOYPATH/data
+    - /bin/cp -R * $DEPLOYPATH
