@@ -1,8 +1,8 @@
 ---
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/capnachi/noitruxinman.edu.vn/pccm
+    - export DEPLOYPATH=/home/capnachi/noitruxinman.edu.vn/pccm/
     - /bin/mkdir -p $DEPLOYPATH
-    - /bin/cp -Rf * $DEPLOYPATH
+    - /bin/rsync -av --delete --exclude=".git" --exclude=".cpanel.yml" ./ $DEPLOYPATH
     - /bin/chmod -R 755 $DEPLOYPATH
-    - /bin/chmod -R 777 $DEPLOYPATH/data 2>/dev/null || true
+    - /bin/chmod -R 777 $DEPLOYPATH/data
