@@ -1,6 +1,7 @@
 <?php
 $page_title = 'Quản lý Môn học';
 require_once 'includes/functions.php';
+require_login();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $subjects = get_subjects();
     if ($_POST['action'] === 'update') {
@@ -24,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash("Đã thêm môn: $name", 'success');
         }
     }
-    header('Location: monhoc.php'); exit;
+    header('Location: ' . BASE_URL . 'monhoc.php'); exit;
 }
 require_once 'includes/header.php';
 $subjects = get_subjects(); ksort($subjects);
