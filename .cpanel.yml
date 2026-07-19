@@ -1,0 +1,11 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/capnachi/public_html/pccm/
+    - /bin/mkdir -p $DEPLOYPATH
+    - /bin/cp -R * $DEPLOYPATH
+    - /bin/cp -R includes $DEPLOYPATH
+    - /bin/cp -R api $DEPLOYPATH
+    - /bin/cp -R data $DEPLOYPATH 2>/dev/null || true
+    - /bin/chmod -R 755 $DEPLOYPATH
+    - /bin/chmod -R 777 $DEPLOYPATH/data
