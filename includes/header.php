@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/functions.php';
 $current = basename($_SERVER['PHP_SELF'], '.php');
+$logged = is_logged_in();
 ?>
 <!DOCTYPE html>
 <html lang="vi">
@@ -36,18 +37,27 @@ pre.summary-text{background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;p
 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav"><span class="navbar-toggler-icon"></span></button>
 <div class="collapse navbar-collapse" id="nav">
 <ul class="navbar-nav me-auto">
+<?php if ($logged): ?>
 <li class="nav-item"><a class="nav-link <?= $current=='index'?'active':'' ?>" href="<?= BASE_URL ?>index.php"><i class="bi bi-house"></i> Tổng quan</a></li>
 <li class="nav-item"><a class="nav-link <?= $current=='them'?'active':'' ?>" href="<?= BASE_URL ?>them.php"><i class="bi bi-plus-circle"></i> Thêm phân công</a></li>
 <li class="nav-item"><a class="nav-link <?= $current=='danhsach'?'active':'' ?>" href="<?= BASE_URL ?>danhsach.php"><i class="bi bi-list-ul"></i> Danh sách</a></li>
+<?php endif; ?>
 <li class="nav-item"><a class="nav-link <?= $current=='baocao'?'active':'' ?>" href="<?= BASE_URL ?>baocao.php"><i class="bi bi-bar-chart"></i> Báo cáo</a></li>
+<?php if ($logged): ?>
 <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-gear"></i> Quản lý</a>
 <ul class="dropdown-menu">
 <li><a class="dropdown-item" href="<?= BASE_URL ?>giaovien.php">Giáo viên</a></li>
 <li><a class="dropdown-item" href="<?= BASE_URL ?>monhoc.php">Môn học & Số tiết</a></li>
 <li><a class="dropdown-item" href="<?= BASE_URL ?>lop.php">Lớp</a></li>
 </ul></li>
+<?php endif; ?>
 </ul>
-<a href="<?= BASE_URL ?>xuat.php" class="btn btn-outline-light btn-sm"><i class="bi bi-download"></i> Xuất CSV</a>
+<?php if ($logged): ?>
+<a href="<?= BASE_URL ?>xuat.php" class="btn btn-outline-light btn-sm me-2"><i class="bi bi-download"></i> Xuất CSV</a>
+<a href="<?= BASE_URL ?>logout.php" class="btn btn-warning btn-sm"><i class="bi bi-box-arrow-right"></i> Đăng xuất</a>
+<?php else: ?>
+<a href="<?= BASE_URL ?>login.php" class="btn btn-outline-light btn-sm"><i class="bi bi-box-arrow-in-right"></i> Đăng nhập</a>
+<?php endif; ?>
 </div></div></nav>
 <div class="container pb-5">
 <?php show_flash(); ?>
