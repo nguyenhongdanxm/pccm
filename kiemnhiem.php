@@ -1,71 +1,36 @@
 <?php
-$page_title = 'Kiêm nhiệm';
+$page_title = 'Quản lý chức vụ kiêm nhiệm';
 require_once 'includes/functions.php';
 require_login();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $items = get_role_assignments();
     $roles = get_roles();
 
+    if (($_POST['action'] ?? '') === 'update') {
+        $idx = intval($_POST['idx'] ?? -1);
+        if (isset($roles[$idx])) {
+            $roles[$idx]['name'] = trim($_POST['name'] ?? $roles[$idx]['name']);
+            $roles[$idx]['need_class'] = isset($_POST['need_class']);
+            $roles[$idx]['periods'] = is_numeric($_POST['periods'] ?? '') ? floatval($_POST['periods']) : 0;
+            $roles[$idx]['note'] = trim($_POST['note'] ?? '');
+            save_json(ROLES_FILE, $roles);
+            flash('Đã cập nhật chức vụ.', 'success');
+        }
+        header('Location: ' . BASE_URL . 'kiemnhiem.php'); exit;
+    }
+
     if (($_POST['action'] ?? '') === 'add') {
-        $teacher = trim($_POST['teacher'] ?? '');
-        $role = trim($_POST['role'] ?? '');
-        $class_name = trim($_POST['class_name'] ?? '');
-        $note = trim($_POST['note'] ?? '');
-
-        $need_class = false;
-        foreach ($roles as $r) {
-            if ($r['name'] === $role) { $need_class = !empty($r['need_class']); break; }
-        }
-
-        if (!$teacher || !$role) {
-            flash('Vui lòng chọn đầy đủ Giáo viên và Chức vụ.', 'danger');
-        } elseif ($need_class && !$class_name) {
-            flash('Chức vụ này cần chọn Lớp (ví dụ GVCN).', 'danger');
-        } else {
-            $exists = false;
-            foreach ($items as $a) {
-                if ($a['teacher'] === $teacher && $a['role'] === $role && ($a['class'] ?? '') === $class_name) {
-                    $exists = true; break;
-                }
-            }
-            if ($exists) {
-                flash('Phân công kiêm nhiệm này đã tồn tại.', 'warning');
-            } else {
-                $items[] = [
-                    'id' => date('YmdHis') . substr(microtime(), 2, 4),
-                    'teacher' => $teacher,
-                    'role' => $role,
-                    'class' => $class_name,
-                    'note' => $note,
-                    'created_at' => date('c'),
-                ];
-                save_json(ROLE_ASSIGNMENTS_FILE, $items);
-                $msg = "$teacher – $role" . ($class_name ? " ($class_name)" : '');
-                flash("Đã thêm kiêm nhiệm: $msg", 'success');
-            }
-        }
-        header('Location: ' . BASE_URL . 'kiemnhiem.php'); exit;
-    }
-
-    if (($_POST['action'] ?? '') === 'delete') {
-        $id = $_POST['id'] ?? '';
-        $items = array_values(array_filter($items, fn($a) => $a['id'] !== $id));
-        save_json(ROLE_ASSIGNMENTS_FILE, $items);
-        flash('Đã xóa kiêm nhiệm.', 'success');
-        header('Location: ' . BASE_URL . 'kiemnhiem.php'); exit;
-    }
-
-    if (($_POST['action'] ?? '') === 'add_role') {
-        $name = trim($_POST['role_name'] ?? '');
-        $need_class = isset($_POST['need_class']);
-        $note = trim($_POST['role_note'] ?? '');
+        $name = trim($_POST['name'] ?? '');
         if ($name) {
-            $roles = get_roles();
             $exists = false;
             foreach ($roles as $r) { if ($r['name'] === $name) { $exists = true; break; } }
             if (!$exists) {
-                $roles[] = ['name' => $name, 'need_class' => $need_class, 'note' => $note];
+                $roles[] = [
+                    'name' => $name,
+                    'need_class' => isset($_POST['need_class']),
+                    'periods' => is_numeric($_POST['periods'] ?? '') ? floatval($_POST['periods']) : 0,
+                    'note' => trim($_POST['note'] ?? ''),
+                ];
                 save_json(ROLES_FILE, $roles);
                 flash("Đã thêm chức vụ: $name", 'success');
             } else {
@@ -74,126 +39,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         header('Location: ' . BASE_URL . 'kiemnhiem.php'); exit;
     }
+
+    if (($_POST['action'] ?? '') === 'delete') {
+        $idx = intval($_POST['idx'] ?? -1);
+        if (isset($roles[$idx])) {
+            $name = $roles[$idx]['name'];
+            array_splice($roles, $idx, 1);
+            save_json(ROLES_FILE, $roles);
+            flash("Đã xóa chức vụ: $name", 'success');
+        }
+        header('Location: ' . BASE_URL . 'kiemnhiem.php'); exit;
+    }
 }
 
 require_once 'includes/header.php';
-$teachers = get_teachers(); sort($teachers);
-$classes = get_classes();
 $roles = get_roles();
-$items = get_role_assignments();
-
-// Group by teacher for display
-$by_teacher = [];
-foreach ($items as $a) {
-    $by_teacher[$a['teacher']][] = $a;
-}
-ksort($by_teacher);
 ?>
 
-<h3 class="mb-4"><i class="bi bi-person-badge"></i> Phân công Kiêm nhiệm</h3>
+<h3 class="mb-3"><i class="bi bi-person-badge"></i> Quản lý chức vụ Kiêm nhiệm & Số tiết</h3>
+<div class="alert alert-info"><i class="bi bi-info-circle"></i> Tạo tên chức vụ và quy định số tiết chuẩn tại đây. Việc <strong>phân công</strong> kiêm nhiệm thực hiện ở trang <a href="<?= BASE_URL ?>them.php">Thêm phân công</a>.</div>
 
-<div class="row">
-<div class="col-lg-5 mb-4">
+<div class="row mb-4">
+<div class="col-md-5">
 <div class="card">
-<div class="card-header"><i class="bi bi-plus-circle"></i> Thêm kiêm nhiệm</div>
+<div class="card-header">Thêm chức vụ mới</div>
 <div class="card-body">
 <form method="post">
 <input type="hidden" name="action" value="add">
-<div class="mb-3">
-<label class="form-label fw-semibold">Giáo viên *</label>
-<select name="teacher" class="form-select" required>
-<option value="">-- Chọn --</option>
-<?php foreach ($teachers as $t): ?><option value="<?= e($t) ?>"><?= e($t) ?></option><?php endforeach; ?>
-</select>
-</div>
-<div class="mb-3">
-<label class="form-label fw-semibold">Chức vụ *</label>
-<select name="role" id="roleSelect" class="form-select" required>
-<option value="">-- Chọn --</option>
-<?php foreach ($roles as $r): ?>
-<option value="<?= e($r['name']) ?>" data-need-class="<?= !empty($r['need_class']) ? '1' : '0' ?>">
-<?= e($r['name']) ?><?= !empty($r['note']) ? ' – ' . e($r['note']) : '' ?>
-</option>
-<?php endforeach; ?>
-</select>
-</div>
-<div class="mb-3" id="classWrap">
-<label class="form-label fw-semibold">Lớp <span class="text-muted small">(bắt buộc với GVCN)</span></label>
-<select name="class_name" id="classSelect" class="form-select">
-<option value="">-- Chọn lớp --</option>
-<?php foreach ($classes as $c): ?><option value="<?= e($c) ?>"><?= e($c) ?></option><?php endforeach; ?>
-</select>
-</div>
-<div class="mb-3">
-<label class="form-label">Ghi chú</label>
-<input type="text" name="note" class="form-control" placeholder="Tùy chọn">
-</div>
-<button type="submit" class="btn btn-primary w-100"><i class="bi bi-save"></i> Lưu</button>
+<div class="mb-2"><input type="text" name="name" class="form-control" placeholder="Tên chức vụ (VD: GVCN, TTCM)" required></div>
+<div class="mb-2"><input type="number" name="periods" class="form-control" step="0.5" min="0" max="20" placeholder="Số tiết" value="1"></div>
+<div class="mb-2"><input type="text" name="note" class="form-control" placeholder="Mô tả (tùy chọn)"></div>
+<div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="need_class" id="nc"><label class="form-check-label" for="nc">Cần chọn lớp (như GVCN)</label></div>
+<button type="submit" class="btn btn-primary w-100">Thêm</button>
 </form>
-</div>
+</div></div></div>
 </div>
 
-<div class="card mt-3">
-<div class="card-header bg-secondary"><i class="bi bi-plus"></i> Thêm chức vụ mới</div>
-<div class="card-body">
-<form method="post" class="row g-2">
-<input type="hidden" name="action" value="add_role">
-<div class="col-12"><input type="text" name="role_name" class="form-control form-control-sm" placeholder="Tên chức vụ" required></div>
-<div class="col-12"><input type="text" name="role_note" class="form-control form-control-sm" placeholder="Mô tả (tùy chọn)"></div>
-<div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="need_class" id="needClass"><label class="form-check-label small" for="needClass">Cần chọn lớp (như GVCN)</label></div></div>
-<div class="col-12"><button type="submit" class="btn btn-outline-secondary btn-sm w-100">Thêm chức vụ</button></div>
+<?php foreach ($roles as $i => $r): ?>
+<div class="card mb-2">
+<div class="card-body py-2">
+<form method="post" class="row g-2 align-items-end">
+<input type="hidden" name="action" value="update">
+<input type="hidden" name="idx" value="<?= $i ?>">
+<div class="col-md-3"><label class="form-label small mb-0">Tên</label>
+<input type="text" name="name" class="form-control form-control-sm" value="<?= e($r['name']) ?>" required></div>
+<div class="col-md-2"><label class="form-label small mb-0">Số tiết</label>
+<input type="number" name="periods" class="form-control form-control-sm" step="0.5" min="0" value="<?= e($r['periods'] ?? 0) ?>"></div>
+<div class="col-md-3"><label class="form-label small mb-0">Mô tả</label>
+<input type="text" name="note" class="form-control form-control-sm" value="<?= e($r['note'] ?? '') ?>"></div>
+<div class="col-md-2"><div class="form-check mt-3">
+<input class="form-check-input" type="checkbox" name="need_class" id="nc<?= $i ?>" <?= !empty($r['need_class']) ? 'checked' : '' ?>>
+<label class="form-check-label small" for="nc<?= $i ?>">Cần lớp</label>
+</div></div>
+<div class="col-md-2 d-flex gap-1">
+<button type="submit" class="btn btn-primary btn-sm">Lưu</button>
+</div>
 </form>
-</div>
-</div>
-</div>
-
-<div class="col-lg-7">
-<div class="card">
-<div class="card-header"><i class="bi bi-list-ul"></i> Danh sách kiêm nhiệm (<?= count($items) ?>)</div>
-<div class="card-body p-0">
-<?php if ($by_teacher): ?>
-<div class="table-responsive">
-<table class="table table-hover mb-0">
-<thead><tr><th>Giáo viên</th><th>Chức vụ</th><th>Lớp</th><th>Ghi chú</th><th></th></tr></thead>
-<tbody>
-<?php foreach ($by_teacher as $teacher => $list): ?>
-<?php foreach ($list as $i => $a): ?>
-<tr>
-<td><?= $i === 0 ? e($teacher) : '' ?></td>
-<td><span class="badge bg-info text-dark"><?= e($a['role']) ?></span></td>
-<td><?= e($a['class'] ?? '') ?></td>
-<td class="text-muted small"><?= e($a['note'] ?? '') ?></td>
-<td>
-<form method="post" class="d-inline" onsubmit="return confirm('Xóa?')">
+<form method="post" class="mt-1" onsubmit="return confirm('Xóa chức vụ này?')">
 <input type="hidden" name="action" value="delete">
-<input type="hidden" name="id" value="<?= e($a['id']) ?>">
-<button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+<input type="hidden" name="idx" value="<?= $i ?>">
+<button type="submit" class="btn btn-outline-danger btn-sm">Xóa</button>
 </form>
-</td>
-</tr>
+</div></div>
 <?php endforeach; ?>
-<?php endforeach; ?>
-</tbody>
-</table>
-</div>
-<?php else: ?>
-<div class="p-4 text-muted text-center">Chưa có phân công kiêm nhiệm.</div>
-<?php endif; ?>
-</div>
-</div>
-</div>
-</div>
-
-<script>
-const roleSelect = document.getElementById('roleSelect');
-const classWrap = document.getElementById('classWrap');
-function toggleClass() {
-    const opt = roleSelect.options[roleSelect.selectedIndex];
-    const need = opt && opt.dataset.needClass === '1';
-    classWrap.style.opacity = need ? '1' : '0.6';
-}
-roleSelect.addEventListener('change', toggleClass);
-toggleClass();
-</script>
 
 <?php require_once 'includes/footer.php'; ?>
