@@ -2,6 +2,7 @@
 require_once __DIR__ . '/functions.php';
 $current = basename($_SERVER['PHP_SELF'], '.php');
 $logged = is_logged_in();
+$active_ver = get_version(get_active_version_id());
 ?>
 <!DOCTYPE html>
 <html lang="vi">
@@ -28,6 +29,7 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif}
 .stat-card .label{color:#666;font-size:.9rem}
 .badge-periods{background:#198754}
 pre.summary-text{background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:1rem;white-space:pre-wrap;font-size:.95rem}
+.version-bar{background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:.5rem 1rem;margin-bottom:1rem;font-size:.95rem}
 </style>
 </head>
 <body>
@@ -42,7 +44,7 @@ pre.summary-text{background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;p
 <li class="nav-item"><a class="nav-link <?= $current=='them'?'active':'' ?>" href="<?= BASE_URL ?>them.php"><i class="bi bi-plus-circle"></i> Thêm phân công</a></li>
 <li class="nav-item"><a class="nav-link <?= $current=='danhsach'?'active':'' ?>" href="<?= BASE_URL ?>danhsach.php"><i class="bi bi-list-ul"></i> Danh sách</a></li>
 <?php endif; ?>
-<li class="nav-item"><a class="nav-link <?= $current=='baocao'?'active':'' ?>" href="<?= BASE_URL ?>baocao.php"><i class="bi bi-bar-chart"></i> Báo cáo</a></li>
+<li class="nav-item"><a class="nav-link <?= ($current=='ketqua'||$current=='baocao')?'active':'' ?>" href="<?= BASE_URL ?>ketqua.php"><i class="bi bi-clipboard-data"></i> Kết quả</a></li>
 <?php if ($logged): ?>
 <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-gear"></i> Quản lý</a>
 <ul class="dropdown-menu">
@@ -63,3 +65,11 @@ pre.summary-text{background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;p
 </div></div></nav>
 <div class="container pb-5">
 <?php show_flash(); ?>
+<?php if ($logged && $active_ver && in_array($current, ['them','danhsach','index','sua'])): ?>
+<div class="version-bar">
+    <i class="bi bi-folder2-open"></i>
+    Đang làm việc trên: <strong><?= e($active_ver['name']) ?></strong>
+    (ngày <?= e($active_ver['date'] ?? '') ?>)
+    · <a href="<?= BASE_URL ?>ketqua.php">Đổi phiên bản</a>
+</div>
+<?php endif; ?>
