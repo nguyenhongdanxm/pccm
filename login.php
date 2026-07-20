@@ -41,7 +41,7 @@ require_once 'includes/header.php';
 </div>
 </div>
 <div class="text-center mt-3">
-<a href="<?= BASE_URL ?>baocao.php" class="text-muted small">← Xem Báo cáo (không cần đăng nhập)</a>
+<a href="<?= BASE_URL ?>ketqua.php" class="text-muted small">← Xem Kết quả (không cần đăng nhập)</a>
 </div>
 </div>
 </div>
