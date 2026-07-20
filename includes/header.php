@@ -41,6 +41,7 @@ pre.summary-text{background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;p
 <li class="nav-item"><a class="nav-link <?= $current=='index'?'active':'' ?>" href="<?= BASE_URL ?>index.php"><i class="bi bi-house"></i> Tổng quan</a></li>
 <li class="nav-item"><a class="nav-link <?= $current=='them'?'active':'' ?>" href="<?= BASE_URL ?>them.php"><i class="bi bi-plus-circle"></i> Thêm phân công</a></li>
 <li class="nav-item"><a class="nav-link <?= $current=='danhsach'?'active':'' ?>" href="<?= BASE_URL ?>danhsach.php"><i class="bi bi-list-ul"></i> Danh sách</a></li>
+<li class="nav-item"><a class="nav-link <?= $current=='kiemnhiem'?'active':'' ?>" href="<?= BASE_URL ?>kiemnhiem.php"><i class="bi bi-person-badge"></i> Kiêm nhiệm</a></li>
 <?php endif; ?>
 <li class="nav-item"><a class="nav-link <?= $current=='baocao'?'active':'' ?>" href="<?= BASE_URL ?>baocao.php"><i class="bi bi-bar-chart"></i> Báo cáo</a></li>
 <?php if ($logged): ?>
