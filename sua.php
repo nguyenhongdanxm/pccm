@@ -3,7 +3,7 @@ $page_title = 'Sửa phân công';
 require_once 'includes/functions.php';
 require_login();
 
-$type = $_GET['type'] ?? 'day'; // day | role
+$type = $_GET['type'] ?? 'day';
 $id = $_GET['id'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $a['note'] = trim($_POST['note'] ?? '');
                 $pm = trim($_POST['periods'] ?? '');
                 if ($pm !== '' && is_numeric($pm)) {
-                    $a['periods'] = floatval($pm);
+                    $a['periods'] = round(floatval($pm), 2);
                 } else {
                     $p = get_periods($a['subject'], $a['class']);
                     if ($p !== null) $a['periods'] = $p;
@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         unset($a);
         if ($found) {
-            save_json(ASSIGNMENTS_FILE, $assignments);
+            save_assignments($assignments);
             flash('Đã cập nhật phân công dạy.', 'success');
         }
         header('Location: ' . BASE_URL . 'danhsach.php'); exit;
@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $a['note'] = trim($_POST['note'] ?? '');
                 $pm = trim($_POST['periods'] ?? '');
                 if ($pm !== '' && is_numeric($pm)) {
-                    $a['periods'] = floatval($pm);
+                    $a['periods'] = round(floatval($pm), 2);
                 } else {
                     foreach ($roles as $r) {
                         if ($r['name'] === $a['role']) {
@@ -65,14 +65,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         unset($a);
         if ($found) {
-            save_json(ROLE_ASSIGNMENTS_FILE, $items);
+            save_role_assignments($items);
             flash('Đã cập nhật kiêm nhiệm.', 'success');
         }
         header('Location: ' . BASE_URL . 'danhsach.php?tab=kiemnhiem'); exit;
     }
 }
 
-// Load item
 $item = null;
 if ($type === 'day') {
     foreach (get_assignments() as $a) {
@@ -157,7 +156,8 @@ $roles = get_roles();
 
 <div class="mb-3">
 <label class="form-label fw-semibold">Số tiết</label>
-<input type="number" name="periods" class="form-control" step="0.1" min="0" value="<?= e($item['periods'] ?? '') ?>">
+<input type="number" name="periods" class="form-control" step="0.01" min="0" max="40" value="<?= e($item['periods'] ?? '') ?>">
+<div class="form-text">Cho phép số lẻ đến 0,01 (vd: 1,25 · 0,75)</div>
 </div>
 <div class="mb-3">
 <label class="form-label">Ghi chú</label>
