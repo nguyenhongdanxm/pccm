@@ -101,10 +101,8 @@ function save_groups($g) { save_json(GROUPS_FILE, $g); }
 function get_teacher_meta() { return load_json(TEACHER_META_FILE, []); }
 function save_teacher_meta($meta) { save_json(TEACHER_META_FILE, $meta); }
 
-/** Meta chuẩn hóa: khxh, khtn, thcs, thpt, tap_su (bool) */
 function get_teacher_flags($name) {
     $m = get_teacher_meta()[$name] ?? [];
-    // Tương thích dữ liệu cũ level/group
     $thcs = !empty($m['thcs']);
     $thpt = !empty($m['thpt']);
     if (!$thcs && !$thpt) {
@@ -137,7 +135,6 @@ function set_teacher_flags($name, $flags) {
     $meta[$name]['thcs'] = !empty($flags['thcs']);
     $meta[$name]['thpt'] = !empty($flags['thpt']);
     $meta[$name]['tap_su'] = !empty($flags['tap_su']);
-    // level đồng bộ
     if (!empty($flags['thpt']) && empty($flags['thcs'])) $meta[$name]['level'] = 'THPT';
     elseif (!empty($flags['thcs'])) $meta[$name]['level'] = 'THCS';
     else $meta[$name]['level'] = 'THCS';
@@ -171,7 +168,6 @@ function set_teacher_group($name, $group) {
 }
 function get_quota($name) {
     $f = get_teacher_flags($name);
-    // Nếu chỉ THPT → quota THPT; còn lại ưu tiên THCS
     if ($f['thpt'] && !$f['thcs']) return get_quota_thpt();
     return get_quota_thcs();
 }
@@ -289,12 +285,27 @@ function get_periods($subject, $class_name) {
     return $subjects[$subject][get_grade($class_name)] ?? null;
 }
 function flash($message, $type = 'success') { $_SESSION['flash'] = ['message'=>$message,'type'=>$type]; }
+
+/** Toast góc dưới phải – không đẩy layout trang */
 function show_flash() {
-    if (!empty($_SESSION['flash'])) {
-        $f = $_SESSION['flash']; unset($_SESSION['flash']);
-        echo '<div class="alert alert-'.htmlspecialchars($f['type']).' alert-dismissible fade show">'.htmlspecialchars($f['message']).'<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
-    }
+    if (empty($_SESSION['flash'])) return;
+    $f = $_SESSION['flash'];
+    unset($_SESSION['flash']);
+    $type = $f['type'] ?? 'success';
+    $msg = htmlspecialchars($f['message'] ?? '', ENT_QUOTES, 'UTF-8');
+    $icon = match ($type) {
+        'danger' => 'bi-x-circle-fill',
+        'warning' => 'bi-exclamation-triangle-fill',
+        'info' => 'bi-info-circle-fill',
+        default => 'bi-check-circle-fill',
+    };
+    echo '<div id="pccm-toast" class="pccm-toast pccm-toast-' . htmlspecialchars($type) . '" role="status">'
+        . '<i class="bi ' . $icon . ' pccm-toast-icon"></i>'
+        . '<span class="pccm-toast-msg">' . $msg . '</span>'
+        . '<button type="button" class="pccm-toast-close" onclick="this.parentElement.remove()" aria-label="Đóng">&times;</button>'
+        . '</div>';
 }
+
 function e($str) { return htmlspecialchars($str ?? '', ENT_QUOTES, 'UTF-8'); }
 function is_logged_in() { return !empty($_SESSION['pccm_admin']); }
 function require_login() {
@@ -319,6 +330,5 @@ if ($__vid) {
     if (!defined('ASSIGNMENTS_FILE')) define('ASSIGNMENTS_FILE', LEGACY_ASSIGNMENTS_FILE);
     if (!defined('ROLE_ASSIGNMENTS_FILE')) define('ROLE_ASSIGNMENTS_FILE', LEGACY_ROLE_ASSIGNMENTS_FILE);
 }
-// Tương thích code cũ dùng hằng QUOTA_*
 if (!defined('QUOTA_THCS')) define('QUOTA_THCS', get_quota_thcs());
 if (!defined('QUOTA_THPT')) define('QUOTA_THPT', get_quota_thpt());
