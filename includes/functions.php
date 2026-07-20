@@ -52,7 +52,6 @@ function create_version($name, $date, $note = '', $copy_from = null) {
     if ($copy_from && get_version($copy_from)) {
         $srcA = load_json(assignments_file($copy_from), []);
         $srcR = load_json(role_assignments_file($copy_from), []);
-        // Đổi id mới để tránh trùng
         foreach ($srcA as &$a) { $a['id'] = $id . '_' . ($a['id'] ?? uniqid()); }
         unset($a);
         foreach ($srcR as &$a) { $a['id'] = $id . '_' . ($a['id'] ?? uniqid()); }
@@ -74,7 +73,6 @@ function migrate_legacy_if_needed() {
     $legacyA = load_json(LEGACY_ASSIGNMENTS_FILE, []);
     $legacyR = load_json(LEGACY_ROLE_ASSIGNMENTS_FILE, []);
 
-    // Nếu có dữ liệu cũ hoặc chưa có phiên bản nào → tạo lần 1
     $id = 'v' . date('YmdHis');
     $versions[] = [
         'id' => $id,
@@ -95,6 +93,7 @@ function init_data() {
     if (!file_exists(SUBJECTS_FILE)) save_json(SUBJECTS_FILE, $DEFAULT_SUBJECTS);
     if (!file_exists(CLASSES_FILE)) save_json(CLASSES_FILE, $DEFAULT_CLASSES);
     if (!file_exists(ROLES_FILE)) save_json(ROLES_FILE, $DEFAULT_ROLES);
+    if (!file_exists(TEACHER_META_FILE)) save_json(TEACHER_META_FILE, []);
     migrate_legacy_if_needed();
 }
 
@@ -102,6 +101,23 @@ function get_teachers() { global $DEFAULT_TEACHERS; return load_json(TEACHERS_FI
 function get_subjects() { global $DEFAULT_SUBJECTS; return load_json(SUBJECTS_FILE, $DEFAULT_SUBJECTS); }
 function get_classes() { global $DEFAULT_CLASSES; return load_json(CLASSES_FILE, $DEFAULT_CLASSES); }
 function get_roles() { global $DEFAULT_ROLES; return load_json(ROLES_FILE, $DEFAULT_ROLES); }
+
+function get_teacher_meta() { return load_json(TEACHER_META_FILE, []); }
+function save_teacher_meta($meta) { save_json(TEACHER_META_FILE, $meta); }
+function get_teacher_level($name) {
+    $meta = get_teacher_meta();
+    $lv = $meta[$name]['level'] ?? 'THCS';
+    return in_array($lv, ['THCS', 'THPT']) ? $lv : 'THCS';
+}
+function set_teacher_level($name, $level) {
+    $meta = get_teacher_meta();
+    if (!isset($meta[$name])) $meta[$name] = [];
+    $meta[$name]['level'] = in_array($level, ['THCS', 'THPT']) ? $level : 'THCS';
+    save_teacher_meta($meta);
+}
+function get_quota($name) {
+    return get_teacher_level($name) === 'THPT' ? QUOTA_THPT : QUOTA_THCS;
+}
 
 function get_assignments($vid = null) {
     $vid = $vid ?: get_active_version_id();
@@ -135,12 +151,6 @@ function save_role_assignments($data, $vid = null) {
     save_json(role_assignments_file($vid), $data);
 }
 
-// Tương thích code cũ dùng constant ASSIGNMENTS_FILE
-function save_json_compat($file, $data) {
-    // Nếu gọi save_json với path cũ, redirect sang version
-    save_json($file, $data);
-}
-
 function ten_cuoi($hoten) {
     $parts = preg_split('/\s+/u', trim($hoten));
     return mb_strtolower(end($parts) ?: $hoten, 'UTF-8');
@@ -158,23 +168,94 @@ function get_teacher_loads($vid = null) {
     $load = [];
     foreach (get_assignments($vid) as $a) {
         $t = $a['teacher'];
-        if (!isset($load[$t])) $load[$t] = ['day' => 0, 'role' => 0, 'total' => 0, 'classes' => []];
+        if (!isset($load[$t])) $load[$t] = ['day' => 0, 'role' => 0, 'total' => 0, 'classes' => [], 'subjects' => [], 'roles' => []];
         $load[$t]['day'] += floatval($a['periods'] ?? 0);
         if (!empty($a['class'])) $load[$t]['classes'][$a['class']] = true;
+        $sub = $a['subject'] ?? '';
+        if ($sub !== '') {
+            if (!isset($load[$t]['subjects'][$sub])) $load[$t]['subjects'][$sub] = [];
+            $load[$t]['subjects'][$sub][] = ($a['class'] ?? '') . '(' . ($a['periods'] ?? 0) . ')';
+        }
     }
     foreach (get_role_assignments($vid) as $a) {
         $t = $a['teacher'];
-        if (!isset($load[$t])) $load[$t] = ['day' => 0, 'role' => 0, 'total' => 0, 'classes' => []];
+        if (!isset($load[$t])) $load[$t] = ['day' => 0, 'role' => 0, 'total' => 0, 'classes' => [], 'subjects' => [], 'roles' => []];
         $load[$t]['role'] += floatval($a['periods'] ?? 0);
         if (!empty($a['class'])) $load[$t]['classes'][$a['class']] = true;
+        $label = $a['role'] ?? '';
+        if (!empty($a['class'])) $label .= ' (' . $a['class'] . ')';
+        if ($label !== '') $load[$t]['roles'][] = $label;
     }
     foreach ($load as $t => &$row) {
         $row['total'] = $row['day'] + $row['role'];
         $row['class_count'] = count($row['classes']);
-        unset($row['classes']);
+        $row['level'] = get_teacher_level($t);
+        $row['quota'] = get_quota($t);
+        $row['diff'] = $row['total'] - $row['quota']; // >0 thừa, <0 thiếu
+        // Format môn dạy: "Toán: 6A(4), 7B(4); Văn: ..."
+        $parts = [];
+        ksort($row['subjects']);
+        foreach ($row['subjects'] as $s => $cls) {
+            $parts[] = $s . ': ' . implode(', ', $cls);
+        }
+        $row['mon_day'] = implode('; ', $parts);
+        $row['kiem_nhiem'] = implode('; ', $row['roles']);
+        unset($row['classes'], $row['subjects'], $row['roles']);
     }
     unset($row);
     return $load;
+}
+
+/** Dòng xuất bảng: tất cả GV (có hoặc chưa phân công), sắp theo tên */
+function get_export_rows($vid = null) {
+    $loads = get_teacher_loads($vid);
+    $teachers = get_teachers_sorted();
+    $rows = [];
+    foreach ($teachers as $t) {
+        if (isset($loads[$t])) {
+            $r = $loads[$t];
+            $rows[] = [
+                'name' => $t,
+                'level' => $r['level'],
+                'mon_day' => $r['mon_day'],
+                'kiem_nhiem' => $r['kiem_nhiem'],
+                'day' => $r['day'],
+                'role' => $r['role'],
+                'total' => $r['total'],
+                'quota' => $r['quota'],
+                'diff' => $r['diff'],
+            ];
+        } else {
+            $rows[] = [
+                'name' => $t,
+                'level' => get_teacher_level($t),
+                'mon_day' => '',
+                'kiem_nhiem' => '',
+                'day' => 0,
+                'role' => 0,
+                'total' => 0,
+                'quota' => get_quota($t),
+                'diff' => -get_quota($t),
+            ];
+        }
+    }
+    // Thêm GV có phân công nhưng không còn trong danh sách
+    foreach ($loads as $t => $r) {
+        if (!in_array($t, $teachers, true)) {
+            $rows[] = [
+                'name' => $t,
+                'level' => $r['level'],
+                'mon_day' => $r['mon_day'],
+                'kiem_nhiem' => $r['kiem_nhiem'],
+                'day' => $r['day'],
+                'role' => $r['role'],
+                'total' => $r['total'],
+                'quota' => $r['quota'],
+                'diff' => $r['diff'],
+            ];
+        }
+    }
+    return $rows;
 }
 
 function get_grade($class_name) { return preg_replace('/[^0-9]/', '', $class_name); }
@@ -215,7 +296,6 @@ function logout() {
 if (session_status() === PHP_SESSION_NONE) session_start();
 init_data();
 
-// Compatibility: define constants for active version files
 $__vid = get_active_version_id();
 if ($__vid) {
     if (!defined('ASSIGNMENTS_FILE')) define('ASSIGNMENTS_FILE', assignments_file($__vid));
