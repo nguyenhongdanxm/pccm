@@ -7,16 +7,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     $teachers = get_teachers();
 
+    if ($action === 'save_quota') {
+        $s = get_settings();
+        $s['quota_thcs'] = is_numeric($_POST['quota_thcs'] ?? '') ? floatval($_POST['quota_thcs']) : DEFAULT_QUOTA_THCS;
+        $s['quota_thpt'] = is_numeric($_POST['quota_thpt'] ?? '') ? floatval($_POST['quota_thpt']) : DEFAULT_QUOTA_THPT;
+        save_settings($s);
+        flash('Đã lưu định mức tiết/tuần.', 'success');
+    }
+
     if ($action === 'add') {
         $name = trim($_POST['name'] ?? '');
-        $level = $_POST['level'] ?? 'THCS';
-        $group = trim($_POST['group'] ?? '');
         if ($name && !in_array($name, $teachers)) {
             $teachers[] = $name;
             $teachers = sort_teachers_by_ten($teachers);
             save_json(TEACHERS_FILE, $teachers);
-            set_teacher_level($name, $level);
-            if ($group !== '') set_teacher_group($name, $group);
+            set_teacher_flags($name, [
+                'khxh' => !empty($_POST['khxh']),
+                'khtn' => !empty($_POST['khtn']),
+                'thcs' => !empty($_POST['thcs']) || (empty($_POST['thcs']) && empty($_POST['thpt'])),
+                'thpt' => !empty($_POST['thpt']),
+                'tap_su' => !empty($_POST['tap_su']),
+            ]);
             flash("Đã thêm: $name", 'success');
         } else {
             flash($name ? 'Giáo viên đã tồn tại.' : 'Nhập họ tên.', 'warning');
@@ -27,9 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $name = trim($_POST['name'] ?? '');
         $teachers = array_values(array_filter($teachers, fn($t) => $t !== $name));
         save_json(TEACHERS_FILE, $teachers);
-        $meta = get_teacher_meta();
-        unset($meta[$name]);
-        save_teacher_meta($meta);
+        $meta = get_teacher_meta(); unset($meta[$name]); save_teacher_meta($meta);
         flash("Đã xóa: $name", 'success');
     }
 
@@ -40,8 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $idx = array_search($old, $teachers);
             if ($idx !== false) {
                 $teachers[$idx] = $new;
-                $teachers = sort_teachers_by_ten($teachers);
-                save_json(TEACHERS_FILE, $teachers);
+                save_json(TEACHERS_FILE, sort_teachers_by_ten($teachers));
                 $meta = get_teacher_meta();
                 if (isset($meta[$old])) { $meta[$new] = $meta[$old]; unset($meta[$old]); save_teacher_meta($meta); }
                 $assignments = get_assignments();
@@ -55,189 +63,185 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if ($action === 'set_meta') {
+    if ($action === 'set_flags') {
         $name = trim($_POST['name'] ?? '');
         if ($name) {
-            if (isset($_POST['level'])) set_teacher_level($name, $_POST['level']);
-            if (isset($_POST['group'])) set_teacher_group($name, trim($_POST['group']));
+            set_teacher_flags($name, [
+                'khxh' => !empty($_POST['khxh']),
+                'khtn' => !empty($_POST['khtn']),
+                'thcs' => !empty($_POST['thcs']),
+                'thpt' => !empty($_POST['thpt']),
+                'tap_su' => !empty($_POST['tap_su']),
+            ]);
             flash("Đã cập nhật: $name", 'success');
         }
     }
 
-    if ($action === 'add_group') {
-        $g = trim($_POST['group_name'] ?? '');
-        $groups = get_groups();
-        if ($g && !in_array($g, $groups)) {
-            $groups[] = $g;
-            save_groups($groups);
-            flash("Đã thêm tổ: $g", 'success');
-        }
-    }
-
-    if ($action === 'delete_group') {
-        $g = trim($_POST['group_name'] ?? '');
-        $groups = array_values(array_filter(get_groups(), fn($x) => $x !== $g));
-        save_groups($groups);
-        $meta = get_teacher_meta();
-        foreach ($meta as $n => &$m) if (($m['group'] ?? '') === $g) $m['group'] = '';
-        unset($m); save_teacher_meta($meta);
-        flash("Đã xóa tổ: $g", 'success');
-    }
-
-    $q = [];
-    if (!empty($_POST['keep_level'])) $q['level'] = $_POST['keep_level'];
-    if (!empty($_POST['keep_group'])) $q['group'] = $_POST['keep_group'];
+    $q = array_filter([
+        'f_khxh' => $_POST['keep_f_khxh'] ?? '',
+        'f_khtn' => $_POST['keep_f_khtn'] ?? '',
+        'f_thcs' => $_POST['keep_f_thcs'] ?? '',
+        'f_thpt' => $_POST['keep_f_thpt'] ?? '',
+        'f_tap_su' => $_POST['keep_f_tap_su'] ?? '',
+        'q' => $_POST['keep_q'] ?? '',
+    ]);
     header('Location: ' . BASE_URL . 'giaovien.php' . ($q ? '?' . http_build_query($q) : ''));
     exit;
 }
 
 require_once 'includes/header.php';
 $teachers = get_teachers_sorted();
-$groups = get_groups();
-$f_level = $_GET['level'] ?? '';
-$f_group = $_GET['group'] ?? '';
+$q_search = trim($_GET['q'] ?? '');
+$f_khxh = !empty($_GET['f_khxh']);
+$f_khtn = !empty($_GET['f_khtn']);
+$f_thcs = !empty($_GET['f_thcs']);
+$f_thpt = !empty($_GET['f_thpt']);
+$f_tap_su = !empty($_GET['f_tap_su']);
 
-$filtered = array_values(array_filter($teachers, function($t) use ($f_level, $f_group) {
-    if ($f_level && get_teacher_level($t) !== $f_level) return false;
-    if ($f_group && get_teacher_group($t) !== $f_group) return false;
+$filtered = array_values(array_filter($teachers, function($t) use ($q_search, $f_khxh, $f_khtn, $f_thcs, $f_thpt, $f_tap_su) {
+    if ($q_search && mb_stripos($t, $q_search) === false) return false;
+    $f = get_teacher_flags($t);
+    if ($f_khxh && !$f['khxh']) return false;
+    if ($f_khtn && !$f['khtn']) return false;
+    if ($f_thcs && !$f['thcs']) return false;
+    if ($f_thpt && !$f['thpt']) return false;
+    if ($f_tap_su && !$f['tap_su']) return false;
     return true;
 }));
 
-$count_thcs = count(array_filter($teachers, fn($t) => get_teacher_level($t) === 'THCS'));
-$count_thpt = count($teachers) - $count_thcs;
+$n_khxh = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['khxh']));
+$n_khtn = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['khtn']));
+$n_thcs = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['thcs']));
+$n_thpt = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['thpt']));
+$n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']));
 ?>
 
-<h3 class="mb-3"><i class="bi bi-people"></i> Quản lý Giáo viên</h3>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+<h3 class="mb-0"><i class="bi bi-people"></i> Quản lý Giáo viên</h3>
+<form method="post" class="d-flex flex-wrap align-items-end gap-2 border rounded px-3 py-2 bg-white shadow-sm">
+<input type="hidden" name="action" value="save_quota">
+<div>
+<label class="form-label small mb-0 fw-semibold">Định mức THCS</label>
+<div class="input-group input-group-sm" style="width:140px">
+<input type="number" name="quota_thcs" class="form-control" step="0.5" min="1" max="30" value="<?= e(get_quota_thcs()) ?>">
+<span class="input-group-text">tiết/tuần</span>
+</div>
+</div>
+<div>
+<label class="form-label small mb-0 fw-semibold">Định mức THPT</label>
+<div class="input-group input-group-sm" style="width:140px">
+<input type="number" name="quota_thpt" class="form-control" step="0.5" min="1" max="30" value="<?= e(get_quota_thpt()) ?>">
+<span class="input-group-text">tiết/tuần</span>
+</div>
+</div>
+<button type="submit" class="btn btn-primary btn-sm">Lưu định mức</button>
+</form>
+</div>
 
-<div class="row g-3 mb-3">
-<div class="col-6 col-md-3"><div class="card stat-card py-2"><div class="number fs-4"><?= count($teachers) ?></div><div class="label">Tổng GV</div></div></div>
-<div class="col-6 col-md-3"><div class="card stat-card py-2"><div class="number fs-4"><?= $count_thcs ?></div><div class="label">THCS (ĐM <?= QUOTA_THCS ?>t)</div></div></div>
-<div class="col-6 col-md-3"><div class="card stat-card py-2"><div class="number fs-4"><?= $count_thpt ?></div><div class="label">THPT (ĐM <?= QUOTA_THPT ?>t)</div></div></div>
-<div class="col-6 col-md-3"><div class="card stat-card py-2"><div class="number fs-4"><?= count($groups) ?></div><div class="label">Tổ chuyên môn</div></div></div>
+<div class="row g-2 mb-3">
+<div class="col"><div class="card stat-card py-2"><div class="number fs-5"><?= count($teachers) ?></div><div class="label">Tổng GV</div></div></div>
+<div class="col"><div class="card stat-card py-2"><div class="number fs-5"><?= $n_khxh ?></div><div class="label">Tổ KHXH</div></div></div>
+<div class="col"><div class="card stat-card py-2"><div class="number fs-5"><?= $n_khtn ?></div><div class="label">Tổ KHTN</div></div></div>
+<div class="col"><div class="card stat-card py-2"><div class="number fs-5"><?= $n_thcs ?></div><div class="label">THCS</div></div></div>
+<div class="col"><div class="card stat-card py-2"><div class="number fs-5"><?= $n_thpt ?></div><div class="label">THPT</div></div></div>
+<div class="col"><div class="card stat-card py-2"><div class="number fs-5"><?= $n_tap ?></div><div class="label">Tập sự</div></div></div>
 </div>
 
 <div class="row">
-<div class="col-lg-4 mb-4">
-<div class="card mb-3">
+<div class="col-lg-3 mb-4">
+<div class="card">
 <div class="card-header">Thêm giáo viên</div>
 <div class="card-body">
 <form method="post">
 <input type="hidden" name="action" value="add">
-<div class="mb-2"><input type="text" name="name" class="form-control" placeholder="Họ tên" required></div>
-<div class="mb-2">
-<label class="form-label small mb-0">Cấp dạy</label>
-<div class="btn-group w-100" role="group">
-<input type="radio" class="btn-check" name="level" id="lvTHCS" value="THCS" checked>
-<label class="btn btn-outline-primary btn-sm" for="lvTHCS">THCS (17t)</label>
-<input type="radio" class="btn-check" name="level" id="lvTHPT" value="THPT">
-<label class="btn btn-outline-primary btn-sm" for="lvTHPT">THPT (15t)</label>
-</div>
-</div>
-<div class="mb-2">
-<label class="form-label small mb-0">Tổ chuyên môn</label>
-<select name="group" class="form-select form-select-sm">
-<option value="">-- Chưa gán --</option>
-<?php foreach ($groups as $g): ?><option value="<?= e($g) ?>"><?= e($g) ?></option><?php endforeach; ?>
-</select>
-</div>
-<button type="submit" class="btn btn-primary w-100">Thêm</button>
+<div class="mb-2"><input type="text" name="name" class="form-control form-control-sm" placeholder="Họ tên" required></div>
+<div class="form-check"><input class="form-check-input" type="checkbox" name="khxh" id="a_khxh" value="1"><label class="form-check-label" for="a_khxh">Tổ KHXH</label></div>
+<div class="form-check"><input class="form-check-input" type="checkbox" name="khtn" id="a_khtn" value="1"><label class="form-check-label" for="a_khtn">Tổ KHTN</label></div>
+<div class="form-check"><input class="form-check-input" type="checkbox" name="thcs" id="a_thcs" value="1" checked><label class="form-check-label" for="a_thcs">THCS</label></div>
+<div class="form-check"><input class="form-check-input" type="checkbox" name="thpt" id="a_thpt" value="1"><label class="form-check-label" for="a_thpt">THPT</label></div>
+<div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="tap_su" id="a_tap" value="1"><label class="form-check-label" for="a_tap">Tập sự</label></div>
+<button type="submit" class="btn btn-primary btn-sm w-100">Thêm</button>
 </form>
-</div></div>
-
-<div class="card">
-<div class="card-header">Quản lý tổ chuyên môn</div>
-<div class="card-body">
-<form method="post" class="input-group input-group-sm mb-2">
-<input type="hidden" name="action" value="add_group">
-<input type="text" name="group_name" class="form-control" placeholder="Tên tổ mới" required>
-<button class="btn btn-outline-primary">Thêm tổ</button>
-</form>
-<?php foreach ($groups as $g): ?>
-<div class="d-flex justify-content-between align-items-center border rounded px-2 py-1 mb-1">
-<span class="small"><?= e($g) ?></span>
-<form method="post" onsubmit="return confirm('Xóa tổ này?')">
-<input type="hidden" name="action" value="delete_group">
-<input type="hidden" name="group_name" value="<?= e($g) ?>">
-<button class="btn btn-sm btn-outline-danger py-0 px-1">×</button>
-</form>
-</div>
-<?php endforeach; ?>
 </div></div>
 </div>
 
-<div class="col-lg-8">
+<div class="col-lg-9">
 <div class="card">
-<div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-<span>Danh sách (<?= count($filtered) ?>/<?= count($teachers) ?>)</span>
-<form method="get" class="d-flex flex-wrap gap-1">
-<select name="level" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
-<option value="">Mọi cấp</option>
-<option value="THCS" <?= $f_level==='THCS'?'selected':'' ?>>THCS</option>
-<option value="THPT" <?= $f_level==='THPT'?'selected':'' ?>>THPT</option>
-</select>
-<select name="group" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
-<option value="">Mọi tổ</option>
-<?php foreach ($groups as $g): ?>
-<option value="<?= e($g) ?>" <?= $f_group===$g?'selected':'' ?>><?= e($g) ?></option>
-<?php endforeach; ?>
-</select>
-<?php if ($f_level || $f_group): ?><a href="<?= BASE_URL ?>giaovien.php" class="btn btn-sm btn-outline-light">Xóa lọc</a><?php endif; ?>
+<div class="card-header">
+<form method="get" class="row g-2 align-items-end">
+<div class="col-md-4">
+<input type="text" name="q" class="form-control form-control-sm" placeholder="Tìm tên..." value="<?= e($q_search) ?>">
+</div>
+<div class="col-auto">
+<div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" name="f_khxh" value="1" id="fk" <?= $f_khxh?'checked':'' ?>><label class="form-check-label small" for="fk">KHXH</label></div>
+<div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" name="f_khtn" value="1" id="fn" <?= $f_khtn?'checked':'' ?>><label class="form-check-label small" for="fn">KHTN</label></div>
+<div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" name="f_thcs" value="1" id="fc" <?= $f_thcs?'checked':'' ?>><label class="form-check-label small" for="fc">THCS</label></div>
+<div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" name="f_thpt" value="1" id="fp" <?= $f_thpt?'checked':'' ?>><label class="form-check-label small" for="fp">THPT</label></div>
+<div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" name="f_tap_su" value="1" id="ft" <?= $f_tap_su?'checked':'' ?>><label class="form-check-label small" for="ft">Tập sự</label></div>
+</div>
+<div class="col-auto">
+<button class="btn btn-sm btn-light text-dark">Lọc</button>
+<a href="<?= BASE_URL ?>giaovien.php" class="btn btn-sm btn-outline-light">Xóa lọc</a>
+</div>
 </form>
 </div>
 <div class="card-body p-0">
 <div class="table-responsive">
-<table class="table table-hover table-sm mb-0 align-middle">
-<thead><tr><th>#</th><th>Họ tên</th><th>Cấp</th><th>Tổ</th><th>ĐM</th><th></th></tr></thead>
+<table class="table table-sm table-hover mb-0 align-middle text-center">
+<thead>
+<tr>
+<th class="text-start">#</th>
+<th class="text-start">Họ tên</th>
+<th title="Tổ Khoa học xã hội">Tổ KHXH</th>
+<th title="Tổ Khoa học tự nhiên">Tổ KHTN</th>
+<th>THCS</th>
+<th>THPT</th>
+<th>Tập sự</th>
+<th>ĐM</th>
+<th></th>
+</tr>
+</thead>
 <tbody>
 <?php foreach ($filtered as $i => $t):
-    $lv = get_teacher_level($t);
-    $gr = get_teacher_group($t);
+    $f = get_teacher_flags($t);
+    $quota = get_quota($t);
 ?>
 <tr>
-<td><?= $i+1 ?></td>
-<td>
+<td class="text-start"><?= $i+1 ?></td>
+<td class="text-start">
 <strong><?= e($t) ?></strong>
 <div class="collapse mt-1" id="rn<?= $i ?>">
 <form method="post" class="input-group input-group-sm">
 <input type="hidden" name="action" value="rename">
 <input type="hidden" name="old_name" value="<?= e($t) ?>">
-<input type="hidden" name="keep_level" value="<?= e($f_level) ?>">
-<input type="hidden" name="keep_group" value="<?= e($f_group) ?>">
 <input type="text" name="new_name" class="form-control" value="<?= e($t) ?>" required>
-<button class="btn btn-primary">Lưu tên</button>
+<button class="btn btn-primary">Lưu</button>
 </form>
 </div>
 </td>
-<td>
-<form method="post" class="d-inline">
-<input type="hidden" name="action" value="set_meta">
+<td colspan="5" class="p-1">
+<form method="post" id="flag<?= $i ?>" class="d-contents">
+<input type="hidden" name="action" value="set_flags">
 <input type="hidden" name="name" value="<?= e($t) ?>">
-<input type="hidden" name="keep_level" value="<?= e($f_level) ?>">
-<input type="hidden" name="keep_group" value="<?= e($f_group) ?>">
-<select name="level" class="form-select form-select-sm" style="width:auto;min-width:90px" onchange="this.form.submit()">
-<option value="THCS" <?= $lv==='THCS'?'selected':'' ?>>THCS</option>
-<option value="THPT" <?= $lv==='THPT'?'selected':'' ?>>THPT</option>
-</select>
+<input type="hidden" name="keep_q" value="<?= e($q_search) ?>">
+<?php if ($f_khxh): ?><input type="hidden" name="keep_f_khxh" value="1"><?php endif; ?>
+<?php if ($f_khtn): ?><input type="hidden" name="keep_f_khtn" value="1"><?php endif; ?>
+<?php if ($f_thcs): ?><input type="hidden" name="keep_f_thcs" value="1"><?php endif; ?>
+<?php if ($f_thpt): ?><input type="hidden" name="keep_f_thpt" value="1"><?php endif; ?>
+<?php if ($f_tap_su): ?><input type="hidden" name="keep_f_tap_su" value="1"><?php endif; ?>
 </form>
+<div class="d-flex justify-content-around">
+<input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="khxh" value="1" <?= $f['khxh']?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()">
+<input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="khtn" value="1" <?= $f['khtn']?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()">
+<input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="thcs" value="1" <?= $f['thcs']?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()">
+<input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="thpt" value="1" <?= $f['thpt']?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()">
+<input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="tap_su" value="1" <?= $f['tap_su']?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()">
+</div>
 </td>
-<td>
-<form method="post" class="d-inline">
-<input type="hidden" name="action" value="set_meta">
-<input type="hidden" name="name" value="<?= e($t) ?>">
-<input type="hidden" name="keep_level" value="<?= e($f_level) ?>">
-<input type="hidden" name="keep_group" value="<?= e($f_group) ?>">
-<select name="group" class="form-select form-select-sm" style="width:auto;min-width:120px" onchange="this.form.submit()">
-<option value="">—</option>
-<?php foreach ($groups as $g): ?>
-<option value="<?= e($g) ?>" <?= $gr===$g?'selected':'' ?>><?= e($g) ?></option>
-<?php endforeach; ?>
-</select>
-</form>
-</td>
-<td><span class="badge bg-secondary"><?= get_quota($t) ?>t</span></td>
+<td><span class="badge bg-secondary"><?= number_format($quota,0) ?>t</span></td>
 <td class="text-nowrap">
 <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#rn<?= $i ?>"><i class="bi bi-pencil"></i></button>
-<form method="post" class="d-inline" onsubmit="return confirm('Xóa GV này?')">
+<form method="post" class="d-inline" onsubmit="return confirm('Xóa?')">
 <input type="hidden" name="action" value="delete">
 <input type="hidden" name="name" value="<?= e($t) ?>">
 <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
@@ -245,9 +249,16 @@ $count_thpt = count($teachers) - $count_thcs;
 </td>
 </tr>
 <?php endforeach; ?>
-<?php if (!$filtered): ?><tr><td colspan="6" class="text-center text-muted">Không có giáo viên phù hợp bộ lọc.</td></tr><?php endif; ?>
-</tbody></table>
-</div></div></div>
+<?php if (!$filtered): ?>
+<tr><td colspan="9" class="text-muted py-3">Không có giáo viên phù hợp.</td></tr>
+<?php endif; ?>
+</tbody>
+</table>
+</div>
+<div class="card-footer small text-muted">
+Hiển thị <?= count($filtered) ?>/<?= count($teachers) ?> · Click ô tích để gán nhanh · Định mức theo cấp THCS/THPT đã cấu hình phía trên
+</div>
+</div></div>
 </div></div>
 
 <?php require_once 'includes/footer.php'; ?>
