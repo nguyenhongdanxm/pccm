@@ -3,6 +3,8 @@ require_once __DIR__ . '/functions.php';
 $current = basename($_SERVER['PHP_SELF'], '.php');
 $logged = is_logged_in();
 $active_ver = get_version(get_active_version_id());
+$pc_pages = ['them','danhsach','doicheo','rasoat','sua'];
+$pc_active = in_array($current, $pc_pages, true);
 ?>
 <!DOCTYPE html>
 <html lang="vi">
@@ -19,6 +21,10 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
 .navbar{background:var(--primary)!important}
 .navbar .navbar-brand,.navbar .nav-link{color:#fff!important}
 .navbar .nav-link:hover,.navbar .nav-link.active{color:#ffc107!important}
+.navbar .dropdown-menu{border:none;box-shadow:0 8px 24px rgba(0,0,0,.12);border-radius:10px}
+.navbar .dropdown-item{font-weight:500;padding:.55rem 1rem}
+.navbar .dropdown-item:hover{background:#e8f0fe;color:var(--primary)}
+.navbar .dropdown-item.active{background:var(--primary);color:#fff}
 .nav-tabs{border-bottom:2px solid #dee2e6}
 .nav-tabs .nav-link{color:#1F4E79!important;font-weight:600;background:#fff;border:1px solid transparent}
 .nav-tabs .nav-link:hover{color:#0d3a5c!important;background:#e8f0fe;border-color:#dee2e6 #dee2e6 #fff}
@@ -28,6 +34,8 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
 .card-header.bg-success{background:#198754!important;color:#fff!important}
 .card-header.bg-info{background:#0dcaf0!important;color:#053b4a!important}
 .card-header.bg-secondary{background:#6c757d!important;color:#fff!important}
+.card-header.bg-warning{background:#ffc107!important;color:#664d03!important}
+.card-header.bg-danger{background:#dc3545!important;color:#fff!important}
 .btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
 .btn-primary:hover{background:var(--primary-light);border-color:var(--primary-light);color:#fff}
 .btn-info{color:#053b4a!important}
@@ -35,12 +43,10 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
 .stat-card{text-align:center;padding:1.25rem}
 .stat-card .number{font-size:2rem;font-weight:700;color:var(--primary)}
 .stat-card .label{color:#555;font-size:.9rem}
-.badge-periods{background:#198754;color:#fff}
 .chip{display:inline-flex;align-items:center;gap:4px;background:#e8f0fe;color:#1F4E79;border:1px solid #b6d0f0;border-radius:20px;padding:2px 8px 2px 10px;margin:2px;font-size:.85rem;font-weight:500}
 .chip-role{background:#d1f0f7;border-color:#9ad8e8;color:#055160}
 .chip .chip-x{border:none;background:#dc3545;color:#fff;border-radius:50%;width:18px;height:18px;line-height:16px;font-size:12px;padding:0;cursor:pointer}
 .chip .chip-x:hover{background:#bb2d3b}
-pre.summary-text{background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:1rem;white-space:pre-wrap;font-size:.95rem;color:#212529}
 .version-bar{background:#fff8e1;border:1px solid #ffc107;border-radius:8px;padding:.5rem 1rem;margin-bottom:1rem;font-size:.95rem;color:#664d03}
 .version-bar a{color:#1F4E79;font-weight:600}
 .diff-over{color:#dc3545;font-weight:700}
@@ -48,31 +54,22 @@ pre.summary-text{background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;p
 .diff-ok{color:#198754;font-weight:600}
 .board-row{border-bottom:1px solid #e9ecef;padding:.6rem 0}
 .board-row:last-child{border-bottom:none}
-/* Toast góc dưới phải */
-.pccm-toast{
-  position:fixed;bottom:24px;right:24px;z-index:9999;
-  display:flex;align-items:flex-start;gap:10px;
-  min-width:260px;max-width:360px;
-  padding:12px 14px;border-radius:10px;
-  box-shadow:0 8px 28px rgba(0,0,0,.18);
-  font-size:.95rem;line-height:1.4;
-  animation:pccmToastIn .25s ease-out;
-}
+.tool-bar{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
+.tool-bar .btn{font-weight:600}
+.warn-box{background:#fff3cd;border-left:4px solid #ffc107;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;color:#664d03}
+.danger-box{background:#f8d7da;border-left:4px solid #dc3545;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;color:#58151c}
+.info-box{background:#e8f0fe;border-left:4px solid var(--primary);border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;color:#1F4E79}
+.pccm-toast{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;align-items:flex-start;gap:10px;min-width:260px;max-width:360px;padding:12px 14px;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);font-size:.95rem;line-height:1.4;animation:pccmToastIn .25s ease-out}
 .pccm-toast-success{background:#d1e7dd;color:#0a3622;border:1px solid #a3cfbb}
 .pccm-toast-danger{background:#f8d7da;color:#58151c;border:1px solid #f1aeb5}
 .pccm-toast-warning{background:#fff3cd;color:#664d03;border:1px solid #ffe69c}
 .pccm-toast-info{background:#cff4fc;color:#055160;border:1px solid #9eeaf9}
 .pccm-toast-icon{font-size:1.2rem;flex-shrink:0;margin-top:1px}
 .pccm-toast-msg{flex:1}
-.pccm-toast-close{
-  border:none;background:transparent;font-size:1.25rem;line-height:1;
-  cursor:pointer;opacity:.6;padding:0 2px;color:inherit
-}
+.pccm-toast-close{border:none;background:transparent;font-size:1.25rem;line-height:1;cursor:pointer;opacity:.6;padding:0 2px;color:inherit}
 .pccm-toast-close:hover{opacity:1}
 @keyframes pccmToastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-@media (max-width:576px){
-  .pccm-toast{left:12px;right:12px;bottom:12px;max-width:none;min-width:0}
-}
+@media (max-width:576px){.pccm-toast{left:12px;right:12px;bottom:12px;max-width:none;min-width:0}}
 </style>
 </head>
 <body>
@@ -84,10 +81,18 @@ pre.summary-text{background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;p
 <ul class="navbar-nav me-auto">
 <?php if ($logged): ?>
 <li class="nav-item"><a class="nav-link <?= $current=='index'?'active':'' ?>" href="<?= BASE_URL ?>index.php"><i class="bi bi-house"></i> Tổng quan</a></li>
-<li class="nav-item"><a class="nav-link <?= $current=='them'?'active':'' ?>" href="<?= BASE_URL ?>them.php"><i class="bi bi-plus-circle"></i> Thêm phân công</a></li>
-<li class="nav-item"><a class="nav-link <?= $current=='danhsach'?'active':'' ?>" href="<?= BASE_URL ?>danhsach.php"><i class="bi bi-list-ul"></i> Danh sách</a></li>
-<li class="nav-item"><a class="nav-link <?= $current=='doicheo'?'active':'' ?>" href="<?= BASE_URL ?>doicheo.php"><i class="bi bi-arrow-left-right"></i> Đổi chéo</a></li>
-<li class="nav-item"><a class="nav-link <?= $current=='rasoat'?'active':'' ?>" href="<?= BASE_URL ?>rasoat.php"><i class="bi bi-search"></i> Rà soát</a></li>
+<li class="nav-item dropdown">
+<a class="nav-link dropdown-toggle <?= $pc_active?'active':'' ?>" href="#" data-bs-toggle="dropdown">
+<i class="bi bi-clipboard-check"></i> Phân công
+</a>
+<ul class="dropdown-menu">
+<li><a class="dropdown-item <?= $current=='them'?'active':'' ?>" href="<?= BASE_URL ?>them.php"><i class="bi bi-plus-circle me-1"></i> Thêm phân công</a></li>
+<li><a class="dropdown-item <?= $current=='danhsach'?'active':'' ?>" href="<?= BASE_URL ?>danhsach.php"><i class="bi bi-list-ul me-1"></i> Danh sách</a></li>
+<li><hr class="dropdown-divider"></li>
+<li><a class="dropdown-item <?= $current=='doicheo'?'active':'' ?>" href="<?= BASE_URL ?>doicheo.php"><i class="bi bi-arrow-left-right me-1"></i> Đổi chéo</a></li>
+<li><a class="dropdown-item <?= $current=='rasoat'?'active':'' ?>" href="<?= BASE_URL ?>rasoat.php"><i class="bi bi-search me-1"></i> Rà soát · Lọc</a></li>
+</ul>
+</li>
 <?php endif; ?>
 <li class="nav-item"><a class="nav-link <?= ($current=='ketqua'||$current=='baocao')?'active':'' ?>" href="<?= BASE_URL ?>ketqua.php"><i class="bi bi-clipboard-data"></i> Kết quả</a></li>
 <?php if ($logged): ?>
@@ -116,5 +121,13 @@ pre.summary-text{background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;p
     Đang làm việc trên: <strong><?= e($active_ver['name']) ?></strong>
     (ngày <?= e($active_ver['date'] ?? '') ?>)
     · <a href="<?= BASE_URL ?>ketqua.php">Đổi phiên bản</a>
+</div>
+<?php endif; ?>
+<?php if ($logged && $pc_active): ?>
+<div class="tool-bar">
+<a href="<?= BASE_URL ?>them.php" class="btn btn-sm <?= $current=='them'?'btn-primary':'btn-outline-primary' ?>"><i class="bi bi-plus-circle"></i> Thêm</a>
+<a href="<?= BASE_URL ?>danhsach.php" class="btn btn-sm <?= $current=='danhsach'?'btn-primary':'btn-outline-primary' ?>"><i class="bi bi-list-ul"></i> Danh sách</a>
+<a href="<?= BASE_URL ?>doicheo.php" class="btn btn-sm <?= $current=='doicheo'?'btn-primary':'btn-outline-primary' ?>"><i class="bi bi-arrow-left-right"></i> Đổi chéo</a>
+<a href="<?= BASE_URL ?>rasoat.php" class="btn btn-sm <?= $current=='rasoat'?'btn-primary':'btn-outline-primary' ?>"><i class="bi bi-search"></i> Rà soát · Lọc</a>
 </div>
 <?php endif; ?>
