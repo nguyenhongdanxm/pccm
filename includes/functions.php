@@ -28,7 +28,23 @@ function get_subjects() { global $DEFAULT_SUBJECTS; return load_json(SUBJECTS_FI
 function get_classes() { global $DEFAULT_CLASSES; return load_json(CLASSES_FILE, $DEFAULT_CLASSES); }
 function get_assignments() { return load_json(ASSIGNMENTS_FILE, []); }
 function get_roles() { global $DEFAULT_ROLES; return load_json(ROLES_FILE, $DEFAULT_ROLES); }
-function get_role_assignments() { return load_json(ROLE_ASSIGNMENTS_FILE, []); }
+function get_role_assignments() {
+    $items = load_json(ROLE_ASSIGNMENTS_FILE, []);
+    $roles = get_roles();
+    $map = [];
+    foreach ($roles as $r) $map[$r['name']] = floatval($r['periods'] ?? 0);
+    // Đồng bộ số tiết nếu bản ghi cũ thiếu
+    $changed = false;
+    foreach ($items as &$a) {
+        if (!isset($a['periods']) || $a['periods'] === '' || $a['periods'] === null) {
+            $a['periods'] = $map[$a['role']] ?? 0;
+            $changed = true;
+        }
+    }
+    unset($a);
+    if ($changed) save_json(ROLE_ASSIGNMENTS_FILE, $items);
+    return $items;
+}
 
 function ten_cuoi($hoten) {
     $parts = preg_split('/\s+/u', trim($hoten));
@@ -43,9 +59,9 @@ function sort_teachers_by_ten($teachers) {
 }
 function get_teachers_sorted() { return sort_teachers_by_ten(get_teachers()); }
 
-/** Tính tải tiết theo giáo viên: dạy môn + kiêm nhiệm */
+/** Tải tiết theo GV: dạy môn + kiêm nhiệm + số lớp */
 function get_teacher_loads() {
-    $load = []; // teacher => ['day'=>, 'role'=>, 'total'=>, 'classes'=>count unique]
+    $load = [];
     foreach (get_assignments() as $a) {
         $t = $a['teacher'];
         if (!isset($load[$t])) $load[$t] = ['day' => 0, 'role' => 0, 'total' => 0, 'classes' => []];
