@@ -30,13 +30,10 @@ function get_assignments() { return load_json(ASSIGNMENTS_FILE, []); }
 function get_roles() { global $DEFAULT_ROLES; return load_json(ROLES_FILE, $DEFAULT_ROLES); }
 function get_role_assignments() { return load_json(ROLE_ASSIGNMENTS_FILE, []); }
 
-/** Lấy tên (chữ cuối) để sắp xếp: Hoàng Văn A -> A */
 function ten_cuoi($hoten) {
     $parts = preg_split('/\s+/u', trim($hoten));
     return mb_strtolower(end($parts) ?: $hoten, 'UTF-8');
 }
-
-/** Sắp xếp danh sách giáo viên theo tên (chữ cuối) */
 function sort_teachers_by_ten($teachers) {
     usort($teachers, function($a, $b) {
         $cmp = strcmp(ten_cuoi($a), ten_cuoi($b));
@@ -44,9 +41,30 @@ function sort_teachers_by_ten($teachers) {
     });
     return $teachers;
 }
+function get_teachers_sorted() { return sort_teachers_by_ten(get_teachers()); }
 
-function get_teachers_sorted() {
-    return sort_teachers_by_ten(get_teachers());
+/** Tính tải tiết theo giáo viên: dạy môn + kiêm nhiệm */
+function get_teacher_loads() {
+    $load = []; // teacher => ['day'=>, 'role'=>, 'total'=>, 'classes'=>count unique]
+    foreach (get_assignments() as $a) {
+        $t = $a['teacher'];
+        if (!isset($load[$t])) $load[$t] = ['day' => 0, 'role' => 0, 'total' => 0, 'classes' => []];
+        $load[$t]['day'] += floatval($a['periods'] ?? 0);
+        if (!empty($a['class'])) $load[$t]['classes'][$a['class']] = true;
+    }
+    foreach (get_role_assignments() as $a) {
+        $t = $a['teacher'];
+        if (!isset($load[$t])) $load[$t] = ['day' => 0, 'role' => 0, 'total' => 0, 'classes' => []];
+        $load[$t]['role'] += floatval($a['periods'] ?? 0);
+        if (!empty($a['class'])) $load[$t]['classes'][$a['class']] = true;
+    }
+    foreach ($load as $t => &$row) {
+        $row['total'] = $row['day'] + $row['role'];
+        $row['class_count'] = count($row['classes']);
+        unset($row['classes']);
+    }
+    unset($row);
+    return $load;
 }
 
 function get_grade($class_name) { return preg_replace('/[^0-9]/', '', $class_name); }
