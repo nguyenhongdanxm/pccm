@@ -11,7 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($roles[$idx])) {
             $roles[$idx]['name'] = trim($_POST['name'] ?? $roles[$idx]['name']);
             $roles[$idx]['need_class'] = isset($_POST['need_class']);
-            $roles[$idx]['periods'] = is_numeric($_POST['periods'] ?? '') ? floatval($_POST['periods']) : 0;
+            $roles[$idx]['periods'] = is_numeric($_POST['periods'] ?? '') ? round(floatval($_POST['periods']), 2) : 0;
             $roles[$idx]['note'] = trim($_POST['note'] ?? '');
             save_json(ROLES_FILE, $roles);
             flash('Đã cập nhật chức vụ.', 'success');
@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $roles[] = [
                     'name' => $name,
                     'need_class' => isset($_POST['need_class']),
-                    'periods' => is_numeric($_POST['periods'] ?? '') ? floatval($_POST['periods']) : 0,
+                    'periods' => is_numeric($_POST['periods'] ?? '') ? round(floatval($_POST['periods']), 2) : 0,
                     'note' => trim($_POST['note'] ?? ''),
                 ];
                 save_json(ROLES_FILE, $roles);
@@ -57,7 +57,7 @@ $roles = get_roles();
 ?>
 
 <h3 class="mb-3"><i class="bi bi-person-badge"></i> Quản lý chức vụ Kiêm nhiệm & Số tiết</h3>
-<div class="alert alert-info"><i class="bi bi-info-circle"></i> Tạo tên chức vụ và quy định số tiết chuẩn tại đây. Việc <strong>phân công</strong> kiêm nhiệm thực hiện ở trang <a href="<?= BASE_URL ?>them.php">Thêm phân công</a>.</div>
+<div class="alert alert-info"><i class="bi bi-info-circle"></i> Tạo tên chức vụ và quy định số tiết chuẩn tại đây (cho phép lẻ đến <strong>0,01</strong>). Việc <strong>phân công</strong> kiêm nhiệm thực hiện ở trang <a href="<?= BASE_URL ?>them.php">Thêm phân công</a>.</div>
 
 <div class="row mb-4">
 <div class="col-md-5">
@@ -67,7 +67,7 @@ $roles = get_roles();
 <form method="post">
 <input type="hidden" name="action" value="add">
 <div class="mb-2"><input type="text" name="name" class="form-control" placeholder="Tên chức vụ (VD: GVCN, TTCM)" required></div>
-<div class="mb-2"><input type="number" name="periods" class="form-control" step="0.5" min="0" max="20" placeholder="Số tiết" value="1"></div>
+<div class="mb-2"><input type="number" name="periods" class="form-control" step="0.01" min="0" max="20" placeholder="Số tiết (vd: 1.25)" value="1"></div>
 <div class="mb-2"><input type="text" name="note" class="form-control" placeholder="Mô tả (tùy chọn)"></div>
 <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="need_class" id="nc"><label class="form-check-label" for="nc">Cần chọn lớp (như GVCN)</label></div>
 <button type="submit" class="btn btn-primary w-100">Thêm</button>
@@ -84,7 +84,7 @@ $roles = get_roles();
 <div class="col-md-3"><label class="form-label small mb-0">Tên</label>
 <input type="text" name="name" class="form-control form-control-sm" value="<?= e($r['name']) ?>" required></div>
 <div class="col-md-2"><label class="form-label small mb-0">Số tiết</label>
-<input type="number" name="periods" class="form-control form-control-sm" step="0.5" min="0" value="<?= e($r['periods'] ?? 0) ?>"></div>
+<input type="number" name="periods" class="form-control form-control-sm" step="0.01" min="0" max="20" value="<?= e($r['periods'] ?? 0) ?>"></div>
 <div class="col-md-3"><label class="form-label small mb-0">Mô tả</label>
 <input type="text" name="note" class="form-control form-control-sm" value="<?= e($r['note'] ?? '') ?>"></div>
 <div class="col-md-2"><div class="form-check mt-3">
