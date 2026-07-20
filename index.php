@@ -2,43 +2,59 @@
 $page_title = 'Trang chủ';
 require_once 'includes/functions.php';
 
-// Đã đăng nhập → vào Tổng quan quản trị
 if (is_logged_in()) {
     require_once 'includes/header.php';
-    $teachers = get_teachers();
+    $teachers = get_teachers_sorted();
     $subjects = get_subjects();
     $classes = get_classes();
     $assignments = get_assignments();
-    $teacher_load = [];
-    foreach ($assignments as $a) {
-        $t = $a['teacher'];
-        $teacher_load[$t] = ($teacher_load[$t] ?? 0) + floatval($a['periods'] ?? 0);
-    }
-    arsort($teacher_load);
-    $max_load = $teacher_load ? max($teacher_load) : 1;
+    $role_assignments = get_role_assignments();
+    $loads = get_teacher_loads();
+
+    // Sắp theo tổng tiết giảm dần
+    uasort($loads, fn($a, $b) => $b['total'] <=> $a['total']);
+    $max_load = $loads ? max(array_column($loads, 'total')) : 1;
+    if ($max_load <= 0) $max_load = 1;
+
+    $total_periods = array_sum(array_column($loads, 'total'));
+    $total_day = array_sum(array_column($loads, 'day'));
+    $total_role = array_sum(array_column($loads, 'role'));
     ?>
     <div class="d-flex justify-content-between align-items-center mb-4">
     <h3 class="mb-0"><i class="bi bi-speedometer2"></i> Tổng quan Phân công 2026-2027</h3>
     </div>
     <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3"><div class="card stat-card"><div class="number"><?= count($teachers) ?></div><div class="label">Giáo viên</div></div></div>
-    <div class="col-6 col-md-3"><div class="card stat-card"><div class="number"><?= count($subjects) ?></div><div class="label">Môn học</div></div></div>
-    <div class="col-6 col-md-3"><div class="card stat-card"><div class="number"><?= count($classes) ?></div><div class="label">Lớp</div></div></div>
-    <div class="col-6 col-md-3"><div class="card stat-card"><div class="number"><?= count($assignments) ?></div><div class="label">Phân công</div></div></div>
+    <div class="col-6 col-md-2"><div class="card stat-card"><div class="number"><?= count($teachers) ?></div><div class="label">Giáo viên</div></div></div>
+    <div class="col-6 col-md-2"><div class="card stat-card"><div class="number"><?= count($classes) ?></div><div class="label">Lớp</div></div></div>
+    <div class="col-6 col-md-2"><div class="card stat-card"><div class="number"><?= count($assignments) ?></div><div class="label">PC dạy môn</div></div></div>
+    <div class="col-6 col-md-2"><div class="card stat-card"><div class="number"><?= count($role_assignments) ?></div><div class="label">Kiêm nhiệm</div></div></div>
+    <div class="col-6 col-md-2"><div class="card stat-card"><div class="number"><?= number_format($total_day, 1) ?></div><div class="label">Tiết dạy</div></div></div>
+    <div class="col-6 col-md-2"><div class="card stat-card"><div class="number"><?= number_format($total_role, 1) ?></div><div class="label">Tiết kiêm nhiệm</div></div></div>
     </div>
-    <?php if ($teacher_load): ?>
+
+    <?php if ($loads): ?>
     <div class="card">
-    <div class="card-header"><i class="bi bi-people"></i> Tải dạy theo giáo viên</div>
+    <div class="card-header"><i class="bi bi-people"></i> Tải theo giáo viên (dạy + kiêm nhiệm = <?= number_format($total_periods, 1) ?> tiết)</div>
     <div class="card-body p-0"><div class="table-responsive">
     <table class="table table-hover mb-0">
-    <thead><tr><th>#</th><th>Giáo viên</th><th class="text-end">Tổng tiết</th><th style="width:40%">Biểu đồ</th></tr></thead>
+    <thead><tr>
+        <th>#</th><th>Giáo viên</th>
+        <th class="text-end">Tiết dạy</th>
+        <th class="text-end">Kiêm nhiệm</th>
+        <th class="text-end">Tổng tiết</th>
+        <th class="text-center">Số lớp</th>
+        <th style="width:28%">Biểu đồ</th>
+    </tr></thead>
     <tbody>
-    <?php $i=1; foreach ($teacher_load as $teacher => $total): ?>
+    <?php $i=1; foreach ($loads as $teacher => $row): ?>
     <tr>
     <td><?= $i++ ?></td>
     <td><?= e($teacher) ?></td>
-    <td class="text-end fw-bold"><?= number_format($total,1) ?></td>
-    <td><div class="progress" style="height:18px"><div class="progress-bar bg-primary" style="width:<?= round($total/$max_load*100) ?>%"><?= number_format($total,1) ?></div></div></td>
+    <td class="text-end"><?= number_format($row['day'], 1) ?></td>
+    <td class="text-end text-info"><?= number_format($row['role'], 1) ?></td>
+    <td class="text-end fw-bold"><?= number_format($row['total'], 1) ?></td>
+    <td class="text-center"><?= $row['class_count'] ?></td>
+    <td><div class="progress" style="height:18px"><div class="progress-bar bg-primary" style="width:<?= round($row['total']/$max_load*100) ?>%"><?= number_format($row['total'],1) ?></div></div></td>
     </tr>
     <?php endforeach; ?>
     </tbody></table></div></div></div>
@@ -49,7 +65,6 @@ if (is_logged_in()) {
     exit;
 }
 
-// Chưa đăng nhập → trang chào mừng
 require_once 'includes/header.php';
 ?>
 
@@ -63,25 +78,17 @@ require_once 'includes/header.php';
         <h2 class="mt-2 mb-1" style="color:#1F4E79">Ứng dụng Phân công Chuyên môn</h2>
         <p class="text-muted mb-0">Năm học 2026 – 2027</p>
     </div>
-
     <hr>
-
     <h5 class="mb-3"><i class="bi bi-info-circle text-primary"></i> Giới thiệu chức năng</h5>
     <ul class="list-unstyled ms-1">
         <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Thêm phân công:</strong> Chọn giáo viên + môn + lớp → số tiết tự động</li>
-        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Thêm nhanh nhiều lớp:</strong> Gán cùng lúc nhiều lớp cho một giáo viên</li>
-        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Danh sách & Lọc:</strong> Xem, lọc, xóa phân công</li>
-        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Báo cáo tổng hợp:</strong> Xem tải dạy theo từng giáo viên</li>
-        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Quản lý danh mục:</strong> Giáo viên, Môn học & số tiết chuẩn, Lớp</li>
-        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Xuất CSV:</strong> Tải file Excel để in / lưu trữ</li>
+        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Kiêm nhiệm:</strong> GVCN, TTCM… kèm số tiết quy định</li>
+        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Danh sách & Sửa/Xóa:</strong> Quản lý toàn bộ phân công</li>
+        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Báo cáo tổng hợp:</strong> Tải dạy + kiêm nhiệm theo từng GV</li>
+        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Xuất CSV:</strong> Tải file để in / lưu trữ</li>
     </ul>
-
     <div class="alert alert-light border mt-3 mb-0">
-        <small class="text-muted">
-            <i class="bi bi-shield-lock"></i>
-            <strong>Phân quyền:</strong> Ai cũng xem được <em>Báo cáo</em>.
-            Các chức năng chỉnh sửa cần đăng nhập quản trị.
-        </small>
+        <small class="text-muted"><i class="bi bi-shield-lock"></i> <strong>Phân quyền:</strong> Ai cũng xem được <em>Báo cáo</em>. Chỉnh sửa cần đăng nhập quản trị.</small>
     </div>
 </div>
 </div>
