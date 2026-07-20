@@ -19,7 +19,6 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
 .navbar{background:var(--primary)!important}
 .navbar .navbar-brand,.navbar .nav-link{color:#fff!important}
 .navbar .nav-link:hover,.navbar .nav-link.active{color:#ffc107!important}
-/* Tab trong nội dung trang – chữ tối, dễ đọc */
 .nav-tabs{border-bottom:2px solid #dee2e6}
 .nav-tabs .nav-link{color:#1F4E79!important;font-weight:600;background:#fff;border:1px solid transparent}
 .nav-tabs .nav-link:hover{color:#0d3a5c!important;background:#e8f0fe;border-color:#dee2e6 #dee2e6 #fff}
@@ -49,6 +48,31 @@ pre.summary-text{background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;p
 .diff-ok{color:#198754;font-weight:600}
 .board-row{border-bottom:1px solid #e9ecef;padding:.6rem 0}
 .board-row:last-child{border-bottom:none}
+/* Toast góc dưới phải */
+.pccm-toast{
+  position:fixed;bottom:24px;right:24px;z-index:9999;
+  display:flex;align-items:flex-start;gap:10px;
+  min-width:260px;max-width:360px;
+  padding:12px 14px;border-radius:10px;
+  box-shadow:0 8px 28px rgba(0,0,0,.18);
+  font-size:.95rem;line-height:1.4;
+  animation:pccmToastIn .25s ease-out;
+}
+.pccm-toast-success{background:#d1e7dd;color:#0a3622;border:1px solid #a3cfbb}
+.pccm-toast-danger{background:#f8d7da;color:#58151c;border:1px solid #f1aeb5}
+.pccm-toast-warning{background:#fff3cd;color:#664d03;border:1px solid #ffe69c}
+.pccm-toast-info{background:#cff4fc;color:#055160;border:1px solid #9eeaf9}
+.pccm-toast-icon{font-size:1.2rem;flex-shrink:0;margin-top:1px}
+.pccm-toast-msg{flex:1}
+.pccm-toast-close{
+  border:none;background:transparent;font-size:1.25rem;line-height:1;
+  cursor:pointer;opacity:.6;padding:0 2px;color:inherit
+}
+.pccm-toast-close:hover{opacity:1}
+@keyframes pccmToastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@media (max-width:576px){
+  .pccm-toast{left:12px;right:12px;bottom:12px;max-width:none;min-width:0}
+}
 </style>
 </head>
 <body>
