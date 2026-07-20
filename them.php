@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             } else {
                 $periods = get_periods($subject, $class_name);
                 if ($periods === null) {
-                    $periods = is_numeric($periods_manual) ? floatval($periods_manual) : 0;
+                    $periods = is_numeric($periods_manual) ? round(floatval($periods_manual), 2) : 0;
                 }
                 $assignments[] = [
                     'id' => date('YmdHis') . substr(microtime(), 2, 6),
@@ -121,8 +121,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $roleInfo = null;
         foreach ($roles as $r) { if ($r['name'] === $role) { $roleInfo = $r; break; } }
         $need_class = $roleInfo && !empty($roleInfo['need_class']);
-        $periods = $roleInfo['periods'] ?? 0;
-        if ($periods_manual !== '' && is_numeric($periods_manual)) $periods = floatval($periods_manual);
+        $periods = isset($roleInfo['periods']) ? floatval($roleInfo['periods']) : 0;
+        if ($periods_manual !== '' && is_numeric($periods_manual)) {
+            $periods = round(floatval($periods_manual), 2);
+        } else {
+            $periods = round($periods, 2);
+        }
 
         if (!$teacher || !$role) {
             flash('Vui lòng chọn Giáo viên và Chức vụ.', 'danger');
@@ -167,7 +171,6 @@ $assignments = get_assignments();
 $role_items = get_role_assignments();
 $loads = get_teacher_loads();
 
-// Group assignments by teacher
 $day_by_t = [];
 foreach ($assignments as $a) $day_by_t[$a['teacher']][] = $a;
 $role_by_t = [];
@@ -214,7 +217,7 @@ $board_names = sort_teachers_by_ten(array_unique(array_merge(array_keys($day_by_
                         <label class="form-label fw-semibold">Số tiết</label>
                         <div id="periods-display" class="alert alert-success py-2 d-none">Số tiết tự động: <strong id="periods-value">0</strong></div>
                         <div id="periods-manual-wrap" class="d-none">
-                            <input type="number" name="periods_manual" class="form-control" step="0.1" min="0" max="10" placeholder="Nhập số tiết thủ công">
+                            <input type="number" name="periods_manual" class="form-control" step="0.01" min="0" max="20" placeholder="Nhập số tiết (lẻ đến 0,01)">
                         </div>
                     </div>
                     <div class="mb-3"><label class="form-label">Ghi chú</label>
@@ -309,7 +312,7 @@ $board_names = sort_teachers_by_ten(array_unique(array_merge(array_keys($day_by_
 <div class="mb-3">
 <label class="form-label fw-semibold">Số tiết</label>
 <div id="rolePeriodsDisplay" class="alert alert-success py-2 d-none">Số tiết chuẩn: <strong id="rolePeriodsValue">0</strong></div>
-<input type="number" name="periods_manual" class="form-control" step="0.5" min="0" max="20" placeholder="Để trống = dùng số tiết chuẩn">
+<input type="number" name="periods_manual" class="form-control" step="0.01" min="0" max="20" placeholder="Để trống = dùng số tiết chuẩn (lẻ đến 0,01)">
 </div>
 <div class="mb-3"><label class="form-label">Ghi chú</label>
 <input type="text" name="note" class="form-control" placeholder="Tùy chọn"></div>
@@ -322,9 +325,8 @@ $board_names = sort_teachers_by_ten(array_unique(array_merge(array_keys($day_by_
 </div></div></div>
 </div>
 </div>
-</div><!-- tab-content -->
+</div>
 
-<!-- BẢNG THEO DÕI -->
 <div class="card mt-2">
 <div class="card-header d-flex justify-content-between align-items-center">
 <span><i class="bi bi-table"></i> Bảng theo dõi phân công (<?= count($board_names) ?> GV)</span>
@@ -343,11 +345,11 @@ $board_names = sort_teachers_by_ten(array_unique(array_merge(array_keys($day_by_
 <strong><?= e($t) ?></strong>
 <span class="small">
 <span class="badge bg-secondary"><?= e($load['level'] ?? 'THCS') ?></span>
-Dạy: <b><?= number_format($load['day'],1) ?></b>
-· KN: <b><?= number_format($load['role'],1) ?></b>
-· Tổng: <b><?= number_format($load['total'],1) ?></b>
+Dạy: <b><?= number_format($load['day'], 2) ?></b>
+· KN: <b><?= number_format($load['role'], 2) ?></b>
+· Tổng: <b><?= number_format($load['total'], 2) ?></b>
 / ĐM <?= $load['quota'] ?>
-<span class="<?= $diffClass ?>"><?= $load['diff'] > 0 ? '+' : '' ?><?= number_format($load['diff'],1) ?></span>
+<span class="<?= $diffClass ?>"><?= $load['diff'] > 0 ? '+' : '' ?><?= number_format($load['diff'], 2) ?></span>
 </span>
 </div>
 <div class="mb-1">
