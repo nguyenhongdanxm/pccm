@@ -8,6 +8,7 @@ if (!is_dir(DATA_PATH)) mkdir(DATA_PATH, 0755, true);
 define('TEACHERS_FILE', DATA_PATH . '/teachers.json');
 define('TEACHER_META_FILE', DATA_PATH . '/teacher_meta.json');
 define('GROUPS_FILE', DATA_PATH . '/groups.json');
+define('SETTINGS_FILE', DATA_PATH . '/settings.json');
 define('SUBJECTS_FILE', DATA_PATH . '/subjects.json');
 define('CLASSES_FILE', DATA_PATH . '/classes.json');
 define('ROLES_FILE', DATA_PATH . '/roles.json');
@@ -17,8 +18,9 @@ define('ACTIVE_VERSION_FILE', DATA_PATH . '/active_version.json');
 define('LEGACY_ASSIGNMENTS_FILE', DATA_PATH . '/assignments.json');
 define('LEGACY_ROLE_ASSIGNMENTS_FILE', DATA_PATH . '/role_assignments.json');
 
-define('QUOTA_THCS', 17);
-define('QUOTA_THPT', 15);
+// Mặc định (có thể sửa trong Quản lý GV)
+define('DEFAULT_QUOTA_THCS', 17);
+define('DEFAULT_QUOTA_THPT', 15);
 
 define('SCHOOL_SO', 'Sở GD&ĐT Tuyên Quang');
 define('SCHOOL_NAME', 'Trường PTDTNT THCS&THPT Xín Mần');
