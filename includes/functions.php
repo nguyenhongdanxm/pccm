@@ -29,6 +29,26 @@ function get_classes() { global $DEFAULT_CLASSES; return load_json(CLASSES_FILE,
 function get_assignments() { return load_json(ASSIGNMENTS_FILE, []); }
 function get_roles() { global $DEFAULT_ROLES; return load_json(ROLES_FILE, $DEFAULT_ROLES); }
 function get_role_assignments() { return load_json(ROLE_ASSIGNMENTS_FILE, []); }
+
+/** Lấy tên (chữ cuối) để sắp xếp: Hoàng Văn A -> A */
+function ten_cuoi($hoten) {
+    $parts = preg_split('/\s+/u', trim($hoten));
+    return mb_strtolower(end($parts) ?: $hoten, 'UTF-8');
+}
+
+/** Sắp xếp danh sách giáo viên theo tên (chữ cuối) */
+function sort_teachers_by_ten($teachers) {
+    usort($teachers, function($a, $b) {
+        $cmp = strcmp(ten_cuoi($a), ten_cuoi($b));
+        return $cmp !== 0 ? $cmp : strcmp(mb_strtolower($a, 'UTF-8'), mb_strtolower($b, 'UTF-8'));
+    });
+    return $teachers;
+}
+
+function get_teachers_sorted() {
+    return sort_teachers_by_ten(get_teachers());
+}
+
 function get_grade($class_name) { return preg_replace('/[^0-9]/', '', $class_name); }
 function get_periods($subject, $class_name) {
     $subjects = get_subjects();
