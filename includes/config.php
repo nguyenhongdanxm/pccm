@@ -8,9 +8,13 @@ if (!is_dir(DATA_PATH)) mkdir(DATA_PATH, 0755, true);
 define('TEACHERS_FILE', DATA_PATH . '/teachers.json');
 define('SUBJECTS_FILE', DATA_PATH . '/subjects.json');
 define('CLASSES_FILE', DATA_PATH . '/classes.json');
-define('ASSIGNMENTS_FILE', DATA_PATH . '/assignments.json');
 define('ROLES_FILE', DATA_PATH . '/roles.json');
-define('ROLE_ASSIGNMENTS_FILE', DATA_PATH . '/role_assignments.json');
+define('VERSIONS_FILE', DATA_PATH . '/versions.json');
+define('ACTIVE_VERSION_FILE', DATA_PATH . '/active_version.json');
+
+// Legacy (dùng để migrate lần đầu)
+define('LEGACY_ASSIGNMENTS_FILE', DATA_PATH . '/assignments.json');
+define('LEGACY_ROLE_ASSIGNMENTS_FILE', DATA_PATH . '/role_assignments.json');
 
 $DEFAULT_TEACHERS = ["Nguyễn Thị Ngân","Nguyễn Hồng Dân","Lục Thị Kim Liên","Nguyễn Thị Hoa T","Hoàng Tú Phượng","Hoàng Thị Thanh Huệ","Hoàng Trọng Đại","Ma Ngọc Doanh","Nguyễn Thị Hoa V","Nguyễn Thị Ninh","Phú","Lê Thị Hiền","Nguyễn Thị Thu Hường","Vũ Thị Linh","Hoàng Minh Hải","Đinh Thị Phượng","Vương Hữu Sơn","Vũ Thị Thanh Hường","Vàng Thị Thêm","Lương Thị Bích Tuệ","Ma Thị Hà","Vũ Tiến Sĩ","Sùng Đức Kinh","Nguyễn Thị Thu Huyền","Nguyễn Đức Hội","Đinh Xuân Nghĩa","Bùi Thị Xuân","Nguyễn Trọng Dũng","Nguyễn Thị Kim Dung","Hoàng Thị Hiền","Nguyễn Khắc Kiên","Vương Văn Quân"];
 $DEFAULT_CLASSES = ["6A","6B","7A","7B","7C","8A","8B","8C","9A","9B","10A","10B","11A","11B","12A","12B"];
