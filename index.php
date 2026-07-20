@@ -11,7 +11,6 @@ if (is_logged_in()) {
     $role_assignments = get_role_assignments();
     $loads = get_teacher_loads();
 
-    // Sắp theo tổng tiết giảm dần
     uasort($loads, fn($a, $b) => $b['total'] <=> $a['total']);
     $max_load = $loads ? max(array_column($loads, 'total')) : 1;
     if ($max_load <= 0) $max_load = 1;
@@ -19,9 +18,10 @@ if (is_logged_in()) {
     $total_periods = array_sum(array_column($loads, 'total'));
     $total_day = array_sum(array_column($loads, 'day'));
     $total_role = array_sum(array_column($loads, 'role'));
+    $active = get_version(get_active_version_id());
     ?>
     <div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="mb-0"><i class="bi bi-speedometer2"></i> Tổng quan Phân công 2026-2027</h3>
+    <h3 class="mb-0"><i class="bi bi-speedometer2"></i> Tổng quan<?= $active ? ' – ' . e($active['name']) : '' ?></h3>
     </div>
     <div class="row g-3 mb-4">
     <div class="col-6 col-md-2"><div class="card stat-card"><div class="number"><?= count($teachers) ?></div><div class="label">Giáo viên</div></div></div>
@@ -81,23 +81,22 @@ require_once 'includes/header.php';
     <hr>
     <h5 class="mb-3"><i class="bi bi-info-circle text-primary"></i> Giới thiệu chức năng</h5>
     <ul class="list-unstyled ms-1">
-        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Thêm phân công:</strong> Chọn giáo viên + môn + lớp → số tiết tự động</li>
-        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Kiêm nhiệm:</strong> GVCN, TTCM… kèm số tiết quy định</li>
-        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Danh sách & Sửa/Xóa:</strong> Quản lý toàn bộ phân công</li>
-        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Báo cáo tổng hợp:</strong> Tải dạy + kiêm nhiệm theo từng GV</li>
-        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Xuất CSV:</strong> Tải file để in / lưu trữ</li>
+        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Phiên bản phân công:</strong> Lần 1, lần 2… kèm ngày tháng</li>
+        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Thêm phân công:</strong> Dạy môn + kiêm nhiệm, số tiết tự động</li>
+        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Kết quả:</strong> Xem từng phiên bản, tổng tiết theo GV</li>
+        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Sao chép phiên bản:</strong> Tạo lần mới từ dữ liệu lần trước</li>
     </ul>
     <div class="alert alert-light border mt-3 mb-0">
-        <small class="text-muted"><i class="bi bi-shield-lock"></i> <strong>Phân quyền:</strong> Ai cũng xem được <em>Báo cáo</em>. Chỉnh sửa cần đăng nhập quản trị.</small>
+        <small class="text-muted"><i class="bi bi-shield-lock"></i> <strong>Phân quyền:</strong> Ai cũng xem được <em>Kết quả</em>. Chỉnh sửa cần đăng nhập quản trị.</small>
     </div>
 </div>
 </div>
 
 <div class="row g-3">
     <div class="col-md-6">
-        <a href="<?= BASE_URL ?>baocao.php" class="btn btn-success btn-lg w-100 py-3 shadow-sm">
-            <i class="bi bi-bar-chart-fill d-block mb-1" style="font-size:1.8rem"></i>
-            <strong>Xem Báo cáo</strong>
+        <a href="<?= BASE_URL ?>ketqua.php" class="btn btn-success btn-lg w-100 py-3 shadow-sm">
+            <i class="bi bi-clipboard-data d-block mb-1" style="font-size:1.8rem"></i>
+            <strong>Xem Kết quả</strong>
             <div class="small fw-normal opacity-75">Không cần đăng nhập</div>
         </a>
     </div>
