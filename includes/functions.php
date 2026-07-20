@@ -66,7 +66,29 @@ function init_data() {
     if (!file_exists(ROLES_FILE)) save_json(ROLES_FILE, $DEFAULT_ROLES);
     if (!file_exists(TEACHER_META_FILE)) save_json(TEACHER_META_FILE, []);
     if (!file_exists(GROUPS_FILE)) save_json(GROUPS_FILE, $DEFAULT_GROUPS);
+    if (!file_exists(SETTINGS_FILE)) {
+        save_json(SETTINGS_FILE, [
+            'quota_thcs' => DEFAULT_QUOTA_THCS,
+            'quota_thpt' => DEFAULT_QUOTA_THPT,
+        ]);
+    }
     migrate_legacy_if_needed();
+}
+
+function get_settings() {
+    return load_json(SETTINGS_FILE, [
+        'quota_thcs' => DEFAULT_QUOTA_THCS,
+        'quota_thpt' => DEFAULT_QUOTA_THPT,
+    ]);
+}
+function save_settings($s) { save_json(SETTINGS_FILE, $s); }
+function get_quota_thcs() {
+    $s = get_settings();
+    return floatval($s['quota_thcs'] ?? DEFAULT_QUOTA_THCS);
+}
+function get_quota_thpt() {
+    $s = get_settings();
+    return floatval($s['quota_thpt'] ?? DEFAULT_QUOTA_THPT);
 }
 
 function get_teachers() { global $DEFAULT_TEACHERS; return load_json(TEACHERS_FILE, $DEFAULT_TEACHERS); }
@@ -78,12 +100,59 @@ function save_groups($g) { save_json(GROUPS_FILE, $g); }
 
 function get_teacher_meta() { return load_json(TEACHER_META_FILE, []); }
 function save_teacher_meta($meta) { save_json(TEACHER_META_FILE, $meta); }
+
+/** Meta chuẩn hóa: khxh, khtn, thcs, thpt, tap_su (bool) */
+function get_teacher_flags($name) {
+    $m = get_teacher_meta()[$name] ?? [];
+    // Tương thích dữ liệu cũ level/group
+    $thcs = !empty($m['thcs']);
+    $thpt = !empty($m['thpt']);
+    if (!$thcs && !$thpt) {
+        $lv = $m['level'] ?? 'THCS';
+        $thcs = ($lv !== 'THPT');
+        $thpt = ($lv === 'THPT');
+    }
+    $khxh = !empty($m['khxh']);
+    $khtn = !empty($m['khtn']);
+    if (!$khxh && !$khtn && !empty($m['group'])) {
+        $g = mb_strtoupper($m['group'], 'UTF-8');
+        if (str_contains($g, 'KHXH')) $khxh = true;
+        if (str_contains($g, 'KHTN')) $khtn = true;
+    }
+    return [
+        'khxh' => $khxh,
+        'khtn' => $khtn,
+        'thcs' => $thcs,
+        'thpt' => $thpt,
+        'tap_su' => !empty($m['tap_su']),
+        'group' => $m['group'] ?? '',
+    ];
+}
+
+function set_teacher_flags($name, $flags) {
+    $meta = get_teacher_meta();
+    if (!isset($meta[$name])) $meta[$name] = [];
+    $meta[$name]['khxh'] = !empty($flags['khxh']);
+    $meta[$name]['khtn'] = !empty($flags['khtn']);
+    $meta[$name]['thcs'] = !empty($flags['thcs']);
+    $meta[$name]['thpt'] = !empty($flags['thpt']);
+    $meta[$name]['tap_su'] = !empty($flags['tap_su']);
+    // level đồng bộ
+    if (!empty($flags['thpt']) && empty($flags['thcs'])) $meta[$name]['level'] = 'THPT';
+    elseif (!empty($flags['thcs'])) $meta[$name]['level'] = 'THCS';
+    else $meta[$name]['level'] = 'THCS';
+    save_teacher_meta($meta);
+}
+
 function get_teacher_level($name) {
-    $lv = get_teacher_meta()[$name]['level'] ?? 'THCS';
-    return in_array($lv, ['THCS','THPT']) ? $lv : 'THCS';
+    $f = get_teacher_flags($name);
+    if ($f['thpt'] && !$f['thcs']) return 'THPT';
+    if ($f['thcs'] && !$f['thpt']) return 'THCS';
+    if ($f['thpt'] && $f['thcs']) return 'THCS+THPT';
+    return 'THCS';
 }
 function get_teacher_group($name) {
-    return get_teacher_meta()[$name]['group'] ?? '';
+    return get_teacher_flags($name)['group'] ?? '';
 }
 function set_teacher_meta_field($name, $field, $value) {
     $meta = get_teacher_meta();
@@ -92,13 +161,19 @@ function set_teacher_meta_field($name, $field, $value) {
     save_teacher_meta($meta);
 }
 function set_teacher_level($name, $level) {
-    set_teacher_meta_field($name, 'level', in_array($level, ['THCS','THPT']) ? $level : 'THCS');
+    $f = get_teacher_flags($name);
+    if ($level === 'THPT') { $f['thpt'] = true; $f['thcs'] = false; }
+    else { $f['thcs'] = true; $f['thpt'] = false; }
+    set_teacher_flags($name, $f);
 }
 function set_teacher_group($name, $group) {
     set_teacher_meta_field($name, 'group', $group);
 }
 function get_quota($name) {
-    return get_teacher_level($name) === 'THPT' ? QUOTA_THPT : QUOTA_THCS;
+    $f = get_teacher_flags($name);
+    // Nếu chỉ THPT → quota THPT; còn lại ưu tiên THCS
+    if ($f['thpt'] && !$f['thcs']) return get_quota_thpt();
+    return get_quota_thcs();
 }
 
 function get_assignments($vid = null) {
@@ -168,6 +243,7 @@ function get_teacher_loads($vid = null) {
         $row['class_count'] = count($row['classes']);
         $row['level'] = get_teacher_level($t);
         $row['group'] = get_teacher_group($t);
+        $row['flags'] = get_teacher_flags($t);
         $row['quota'] = get_quota($t);
         $row['diff'] = $row['total'] - $row['quota'];
         $parts = []; ksort($row['subjects']);
@@ -243,3 +319,6 @@ if ($__vid) {
     if (!defined('ASSIGNMENTS_FILE')) define('ASSIGNMENTS_FILE', LEGACY_ASSIGNMENTS_FILE);
     if (!defined('ROLE_ASSIGNMENTS_FILE')) define('ROLE_ASSIGNMENTS_FILE', LEGACY_ROLE_ASSIGNMENTS_FILE);
 }
+// Tương thích code cũ dùng hằng QUOTA_*
+if (!defined('QUOTA_THCS')) define('QUOTA_THCS', get_quota_thcs());
+if (!defined('QUOTA_THPT')) define('QUOTA_THPT', get_quota_thpt());
