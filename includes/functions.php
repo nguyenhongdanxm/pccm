@@ -114,8 +114,8 @@ function get_teacher_flags($name) {
     $khtn = !empty($m['khtn']);
     if (!$khxh && !$khtn && !empty($m['group'])) {
         $g = mb_strtoupper($m['group'], 'UTF-8');
-        if (str_contains($g, 'KHXH')) $khxh = true;
-        if (str_contains($g, 'KHTN')) $khtn = true;
+        if (strpos($g, 'KHXH') !== false) $khxh = true;
+        if (strpos($g, 'KHTN') !== false) $khtn = true;
     }
     return [
         'khxh' => $khxh,
@@ -286,19 +286,16 @@ function get_periods($subject, $class_name) {
 }
 function flash($message, $type = 'success') { $_SESSION['flash'] = ['message'=>$message,'type'=>$type]; }
 
-/** Toast góc dưới phải – không đẩy layout trang */
 function show_flash() {
     if (empty($_SESSION['flash'])) return;
     $f = $_SESSION['flash'];
     unset($_SESSION['flash']);
     $type = $f['type'] ?? 'success';
     $msg = htmlspecialchars($f['message'] ?? '', ENT_QUOTES, 'UTF-8');
-    $icon = match ($type) {
-        'danger' => 'bi-x-circle-fill',
-        'warning' => 'bi-exclamation-triangle-fill',
-        'info' => 'bi-info-circle-fill',
-        default => 'bi-check-circle-fill',
-    };
+    $icon = 'bi-check-circle-fill';
+    if ($type === 'danger') $icon = 'bi-x-circle-fill';
+    elseif ($type === 'warning') $icon = 'bi-exclamation-triangle-fill';
+    elseif ($type === 'info') $icon = 'bi-info-circle-fill';
     echo '<div id="pccm-toast" class="pccm-toast pccm-toast-' . htmlspecialchars($type) . '" role="status">'
         . '<i class="bi ' . $icon . ' pccm-toast-icon"></i>'
         . '<span class="pccm-toast-msg">' . $msg . '</span>'
