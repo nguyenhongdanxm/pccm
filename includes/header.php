@@ -26,9 +26,13 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
 .navbar .dropdown-item:hover{background:#e8f0fe;color:var(--primary)}
 .navbar .dropdown-item.active{background:var(--primary);color:#fff}
 .nav-tabs{border-bottom:2px solid #dee2e6}
-.nav-tabs .nav-link{color:#1F4E79!important;font-weight:600;background:#fff;border:1px solid transparent}
+.nav-tabs .nav-link,.nav-pills .nav-link{color:#1F4E79!important;font-weight:600}
+.nav-tabs .nav-link{background:#fff;border:1px solid transparent}
 .nav-tabs .nav-link:hover{color:#0d3a5c!important;background:#e8f0fe;border-color:#dee2e6 #dee2e6 #fff}
 .nav-tabs .nav-link.active{color:#fff!important;background:var(--primary)!important;border-color:var(--primary)!important}
+.nav-pills .nav-link{background:#fff;border:1px solid #dee2e6}
+.nav-pills .nav-link:hover{background:#e8f0fe}
+.nav-pills .nav-link.active{color:#fff!important;background:var(--primary)!important;border-color:var(--primary)}
 .card{border:none;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
 .card-header{background:var(--primary);color:#fff!important;border-radius:12px 12px 0 0!important;font-weight:600}
 .card-header.bg-success{background:#198754!important;color:#fff!important}
@@ -54,8 +58,6 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
 .diff-ok{color:#198754;font-weight:600}
 .board-row{border-bottom:1px solid #e9ecef;padding:.6rem 0}
 .board-row:last-child{border-bottom:none}
-.tool-bar{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
-.tool-bar .btn{font-weight:600}
 .warn-box{background:#fff3cd;border-left:4px solid #ffc107;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;color:#664d03}
 .danger-box{background:#f8d7da;border-left:4px solid #dc3545;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;color:#58151c}
 .info-box{background:#e8f0fe;border-left:4px solid var(--primary);border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;color:#1F4E79}
@@ -81,18 +83,8 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
 <ul class="navbar-nav me-auto">
 <?php if ($logged): ?>
 <li class="nav-item"><a class="nav-link <?= $current=='index'?'active':'' ?>" href="<?= BASE_URL ?>index.php"><i class="bi bi-house"></i> Tổng quan</a></li>
-<li class="nav-item dropdown">
-<a class="nav-link dropdown-toggle <?= $pc_active?'active':'' ?>" href="#" data-bs-toggle="dropdown">
-<i class="bi bi-clipboard-check"></i> Phân công
-</a>
-<ul class="dropdown-menu">
-<li><a class="dropdown-item <?= $current=='them'?'active':'' ?>" href="<?= BASE_URL ?>them.php"><i class="bi bi-plus-circle me-1"></i> Thêm phân công</a></li>
-<li><a class="dropdown-item <?= $current=='danhsach'?'active':'' ?>" href="<?= BASE_URL ?>danhsach.php"><i class="bi bi-list-ul me-1"></i> Danh sách</a></li>
-<li><hr class="dropdown-divider"></li>
-<li><a class="dropdown-item <?= $current=='doicheo'?'active':'' ?>" href="<?= BASE_URL ?>doicheo.php"><i class="bi bi-arrow-left-right me-1"></i> Đổi chéo</a></li>
-<li><a class="dropdown-item <?= $current=='rasoat'?'active':'' ?>" href="<?= BASE_URL ?>rasoat.php"><i class="bi bi-search me-1"></i> Rà soát · Lọc</a></li>
-</ul>
-</li>
+<li class="nav-item"><a class="nav-link <?= in_array($current,['them','doicheo','rasoat'])?'active':'' ?>" href="<?= BASE_URL ?>them.php"><i class="bi bi-clipboard-check"></i> Phân công</a></li>
+<li class="nav-item"><a class="nav-link <?= $current=='danhsach'?'active':'' ?>" href="<?= BASE_URL ?>danhsach.php"><i class="bi bi-list-ul"></i> Danh sách</a></li>
 <?php endif; ?>
 <li class="nav-item"><a class="nav-link <?= ($current=='ketqua'||$current=='baocao')?'active':'' ?>" href="<?= BASE_URL ?>ketqua.php"><i class="bi bi-clipboard-data"></i> Kết quả</a></li>
 <?php if ($logged): ?>
@@ -121,13 +113,5 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
     Đang làm việc trên: <strong><?= e($active_ver['name']) ?></strong>
     (ngày <?= e($active_ver['date'] ?? '') ?>)
     · <a href="<?= BASE_URL ?>ketqua.php">Đổi phiên bản</a>
-</div>
-<?php endif; ?>
-<?php if ($logged && $pc_active): ?>
-<div class="tool-bar">
-<a href="<?= BASE_URL ?>them.php" class="btn btn-sm <?= $current=='them'?'btn-primary':'btn-outline-primary' ?>"><i class="bi bi-plus-circle"></i> Thêm</a>
-<a href="<?= BASE_URL ?>danhsach.php" class="btn btn-sm <?= $current=='danhsach'?'btn-primary':'btn-outline-primary' ?>"><i class="bi bi-list-ul"></i> Danh sách</a>
-<a href="<?= BASE_URL ?>doicheo.php" class="btn btn-sm <?= $current=='doicheo'?'btn-primary':'btn-outline-primary' ?>"><i class="bi bi-arrow-left-right"></i> Đổi chéo</a>
-<a href="<?= BASE_URL ?>rasoat.php" class="btn btn-sm <?= $current=='rasoat'?'btn-primary':'btn-outline-primary' ?>"><i class="bi bi-search"></i> Rà soát · Lọc</a>
 </div>
 <?php endif; ?>
