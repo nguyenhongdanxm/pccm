@@ -117,6 +117,11 @@ function get_teacher_flags($name) {
         if (strpos($g, 'KHXH') !== false) $khxh = true;
         if (strpos($g, 'KHTN') !== false) $khtn = true;
     }
+    // Chuyên môn: mảng tên môn
+    $cm = $m['chuyen_mon'] ?? [];
+    if (is_string($cm) && $cm !== '') $cm = [$cm];
+    if (!is_array($cm)) $cm = [];
+    $cm = array_values(array_filter(array_map('strval', $cm)));
     return [
         'khxh' => $khxh,
         'khtn' => $khtn,
@@ -124,6 +129,7 @@ function get_teacher_flags($name) {
         'thpt' => $thpt,
         'tap_su' => !empty($m['tap_su']),
         'group' => $m['group'] ?? '',
+        'chuyen_mon' => $cm,
     ];
 }
 
@@ -139,6 +145,18 @@ function set_teacher_flags($name, $flags) {
     elseif (!empty($flags['thcs'])) $meta[$name]['level'] = 'THCS';
     else $meta[$name]['level'] = 'THCS';
     save_teacher_meta($meta);
+}
+
+function get_teacher_chuyen_mon($name) {
+    return get_teacher_flags($name)['chuyen_mon'] ?? [];
+}
+
+function set_teacher_chuyen_mon($name, $subjects) {
+    if (!is_array($subjects)) {
+        $subjects = $subjects === '' || $subjects === null ? [] : [$subjects];
+    }
+    $subjects = array_values(array_unique(array_filter(array_map('trim', $subjects))));
+    set_teacher_meta_field($name, 'chuyen_mon', $subjects);
 }
 
 function get_teacher_level($name) {
@@ -240,6 +258,7 @@ function get_teacher_loads($vid = null) {
         $row['level'] = get_teacher_level($t);
         $row['group'] = get_teacher_group($t);
         $row['flags'] = get_teacher_flags($t);
+        $row['chuyen_mon'] = get_teacher_chuyen_mon($t);
         $row['quota'] = get_quota($t);
         $row['diff'] = $row['total'] - $row['quota'];
         $parts = []; ksort($row['subjects']);
@@ -262,6 +281,7 @@ function get_export_rows($vid = null) {
             'name' => $t,
             'level' => $r['level'] ?? get_teacher_level($t),
             'group' => $r['group'] ?? get_teacher_group($t),
+            'chuyen_mon' => $r['chuyen_mon'] ?? get_teacher_chuyen_mon($t),
             'mon_day' => $r['mon_day'] ?? '',
             'kiem_nhiem' => $r['kiem_nhiem'] ?? '',
             'day' => $r['day'] ?? 0,
@@ -273,7 +293,7 @@ function get_export_rows($vid = null) {
     }
     foreach ($loads as $t => $r) {
         if (!in_array($t, $teachers, true)) {
-            $rows[] = ['name'=>$t,'level'=>$r['level'],'group'=>$r['group']??'','mon_day'=>$r['mon_day'],'kiem_nhiem'=>$r['kiem_nhiem'],'day'=>$r['day'],'role'=>$r['role'],'total'=>$r['total'],'quota'=>$r['quota'],'diff'=>$r['diff']];
+            $rows[] = ['name'=>$t,'level'=>$r['level'],'group'=>$r['group']??'','chuyen_mon'=>$r['chuyen_mon']??[],'mon_day'=>$r['mon_day'],'kiem_nhiem'=>$r['kiem_nhiem'],'day'=>$r['day'],'role'=>$r['role'],'total'=>$r['total'],'quota'=>$r['quota'],'diff'=>$r['diff']];
         }
     }
     return $rows;
