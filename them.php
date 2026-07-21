@@ -1,29 +1,31 @@
 <?php
-$page_title = 'Bàn làm việc phân công';
+$page_title = 'Phân công chuyên môn';
 require_once 'includes/functions.php';
 require_login();
 
-function redirect_ws($hash = '') {
-    header('Location: ' . BASE_URL . 'them.php' . ($hash ? '#' . $hash : ''));
+function go_board($extra = '') {
+    header('Location: ' . BASE_URL . 'them.php?ok=1' . $extra . '#board');
     exit;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
 
+    // Xóa
     if ($action === 'delete_day') {
         $id = $_POST['id'] ?? '';
         save_assignments(array_values(array_filter(get_assignments(), fn($a) => $a['id'] !== $id)));
         flash('Đã xóa phân công dạy.', 'success');
-        redirect_ws('bang');
+        go_board();
     }
     if ($action === 'delete_role') {
         $id = $_POST['id'] ?? '';
         save_role_assignments(array_values(array_filter(get_role_assignments(), fn($a) => $a['id'] !== $id)));
         flash('Đã xóa kiêm nhiệm.', 'success');
-        redirect_ws('bang');
+        go_board();
     }
 
+    // Thêm dạy môn (có thay thế nếu trùng)
     if ($action === 'add_one') {
         $assignments = get_assignments();
         $teacher = trim($_POST['teacher'] ?? '');
@@ -31,54 +33,111 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $class_name = trim($_POST['class_name'] ?? '');
         $note = trim($_POST['note'] ?? '');
         $periods_manual = trim($_POST['periods_manual'] ?? '');
-        $force = !empty($_POST['force']);
+        $replace = !empty($_POST['replace']);
+
         if (!$teacher || !$subject || !$class_name) {
             flash('Vui lòng chọn đầy đủ Giáo viên, Môn học và Lớp.', 'danger');
-        } else {
-            $dup = false; $conflict = null;
-            foreach ($assignments as $a) {
-                if ($a['teacher'] === $teacher && $a['subject'] === $subject && $a['class'] === $class_name) { $dup = true; break; }
-                if ($a['subject'] === $subject && $a['class'] === $class_name && $a['teacher'] !== $teacher) $conflict = $a['teacher'];
-            }
-            if ($dup) flash("Đã tồn tại: $teacher – $subject – $class_name", 'warning');
-            elseif ($conflict && !$force) flash("CẢNH BÁO: Môn $subject lớp $class_name đã giao cho $conflict. Tick \"Vẫn thêm\" nếu cố ý.", 'warning');
-            else {
-                $periods = get_periods($subject, $class_name);
-                if ($periods === null) $periods = is_numeric($periods_manual) ? round(floatval($periods_manual), 2) : 0;
-                $assignments[] = ['id'=>date('YmdHis').substr(microtime(),2,6),'teacher'=>$teacher,'subject'=>$subject,'class'=>$class_name,'periods'=>$periods,'note'=>$note,'created_at'=>date('c')];
-                save_assignments($assignments);
-                flash("Đã thêm: $teacher dạy $subject lớp $class_name ($periods tiết)" . ($conflict ? " — trùng với $conflict" : ''), $conflict ? 'warning' : 'success');
+            header('Location: ' . BASE_URL . 'them.php'); exit;
+        }
+
+        $same_self = false;
+        $conflict_teacher = null;
+        $conflict_id = null;
+        foreach ($assignments as $a) {
+            if ($a['subject'] === $subject && $a['class'] === $class_name) {
+                if ($a['teacher'] === $teacher) { $same_self = true; break; }
+                $conflict_teacher = $a['teacher'];
+                $conflict_id = $a['id'];
             }
         }
-        redirect_ws('them');
+
+        if ($same_self) {
+            flash("Đã có: $teacher – $subject – $class_name", 'warning');
+            header('Location: ' . BASE_URL . 'them.php'); exit;
+        }
+
+        if ($conflict_teacher && !$replace) {
+            // Quay lại form kèm tham số để hiện popup thay thế
+            $q = http_build_query([
+                'ask_replace' => 1,
+                'teacher' => $teacher,
+                'subject' => $subject,
+                'class' => $class_name,
+                'note' => $note,
+                'periods_manual' => $periods_manual,
+                'conflict' => $conflict_teacher,
+            ]);
+            header('Location: ' . BASE_URL . 'them.php?' . $q);
+            exit;
+        }
+
+        // Thay thế: xóa phân công cũ cùng môn+lớp
+        if ($conflict_teacher && $replace) {
+            $assignments = array_values(array_filter($assignments, function($a) use ($subject, $class_name) {
+                return !($a['subject'] === $subject && $a['class'] === $class_name);
+            }));
+        }
+
+        $periods = get_periods($subject, $class_name);
+        if ($periods === null) $periods = is_numeric($periods_manual) ? round(floatval($periods_manual), 2) : 0;
+
+        $assignments[] = [
+            'id' => date('YmdHis') . substr(microtime(), 2, 6),
+            'teacher' => $teacher,
+            'subject' => $subject,
+            'class' => $class_name,
+            'periods' => $periods,
+            'note' => $note,
+            'created_at' => date('c'),
+        ];
+        save_assignments($assignments);
+        $msg = "Đã giao: $teacher dạy $subject lớp $class_name ($periods tiết)";
+        if ($conflict_teacher) $msg .= " — đã thay thế $conflict_teacher";
+        flash($msg, $conflict_teacher ? 'warning' : 'success');
+        go_board();
     }
 
+    // Thêm nhiều lớp
     if ($action === 'add_multi') {
         $assignments = get_assignments();
         $teacher = trim($_POST['teacher'] ?? '');
         $subject = trim($_POST['subject'] ?? '');
         $class_list = $_POST['classes'] ?? [];
-        $force = !empty($_POST['force']);
-        if (!$teacher || !$subject || empty($class_list)) flash('Vui lòng chọn đầy đủ.', 'danger');
-        else {
-            $added = 0; $warns = [];
-            foreach ($class_list as $cls) {
-                $exists = false; $conflict = null;
-                foreach ($assignments as $a) {
-                    if ($a['teacher'] === $teacher && $a['subject'] === $subject && $a['class'] === $cls) { $exists = true; break; }
-                    if ($a['subject'] === $subject && $a['class'] === $cls && $a['teacher'] !== $teacher) $conflict = $a['teacher'];
-                }
-                if ($exists) continue;
-                if ($conflict && !$force) { $warns[] = "$subject-$cls → $conflict"; continue; }
-                $assignments[] = ['id'=>date('YmdHis').$cls.substr(microtime(),2,4),'teacher'=>$teacher,'subject'=>$subject,'class'=>$cls,'periods'=>get_periods($subject,$cls)??0,'note'=>'','created_at'=>date('c')];
-                $added++;
-            }
-            save_assignments($assignments);
-            flash("Đã thêm $added phân công." . ($warns ? ' Bỏ qua: '.implode('; ',$warns) : ''), $warns ? 'warning' : 'success');
+        $replace = !empty($_POST['replace']);
+        if (!$teacher || !$subject || empty($class_list)) {
+            flash('Vui lòng chọn đầy đủ.', 'danger');
+            header('Location: ' . BASE_URL . 'them.php'); exit;
         }
-        redirect_ws('them');
+        $added = 0; $replaced = [];
+        foreach ($class_list as $cls) {
+            $conflict = null;
+            foreach ($assignments as $a) {
+                if ($a['subject'] === $subject && $a['class'] === $cls) {
+                    if ($a['teacher'] === $teacher) { $conflict = 'self'; break; }
+                    $conflict = $a['teacher'];
+                }
+            }
+            if ($conflict === 'self') continue;
+            if ($conflict && !$replace) continue;
+            if ($conflict && $replace) {
+                $assignments = array_values(array_filter($assignments, fn($a) => !($a['subject']===$subject && $a['class']===$cls)));
+                $replaced[] = "$cls←$conflict";
+            }
+            $assignments[] = [
+                'id' => date('YmdHis') . $cls . substr(microtime(), 2, 4),
+                'teacher' => $teacher, 'subject' => $subject, 'class' => $cls,
+                'periods' => get_periods($subject, $cls) ?? 0, 'note' => '', 'created_at' => date('c'),
+            ];
+            $added++;
+        }
+        save_assignments($assignments);
+        $msg = "Đã thêm $added phân công.";
+        if ($replaced) $msg .= ' Thay thế: ' . implode(', ', $replaced);
+        flash($msg, $replaced ? 'warning' : 'success');
+        go_board();
     }
 
+    // Thêm kiêm nhiệm
     if ($action === 'add_role') {
         $items = get_role_assignments();
         $roles = get_roles();
@@ -87,77 +146,146 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $class_name = trim($_POST['class_name'] ?? '');
         $note = trim($_POST['note'] ?? '');
         $periods_manual = trim($_POST['periods_manual'] ?? '');
-        $force = !empty($_POST['force']);
+        $replace = !empty($_POST['replace']);
         $roleInfo = null;
         foreach ($roles as $r) if ($r['name'] === $role) { $roleInfo = $r; break; }
         $need_class = $roleInfo && !empty($roleInfo['need_class']);
         $periods = isset($roleInfo['periods']) ? floatval($roleInfo['periods']) : 0;
         if ($periods_manual !== '' && is_numeric($periods_manual)) $periods = round(floatval($periods_manual), 2);
         else $periods = round($periods, 2);
-        if (!$teacher || !$role) flash('Vui lòng chọn Giáo viên và Chức vụ.', 'danger');
-        elseif ($need_class && !$class_name) flash('Chức vụ này cần chọn Lớp.', 'danger');
-        else {
-            $exists = false; $conflict = null;
-            foreach ($items as $a) {
-                if ($a['teacher'] === $teacher && $a['role'] === $role && ($a['class'] ?? '') === $class_name) { $exists = true; break; }
-                if ($need_class && ($a['role'] === $role) && ($a['class'] ?? '') === $class_name && $a['teacher'] !== $teacher) $conflict = $a['teacher'];
+
+        if (!$teacher || !$role) {
+            flash('Chọn Giáo viên và Chức vụ.', 'danger');
+            header('Location: ' . BASE_URL . 'them.php'); exit;
+        }
+        if ($need_class && !$class_name) {
+            flash('Chức vụ này cần chọn Lớp.', 'danger');
+            header('Location: ' . BASE_URL . 'them.php'); exit;
+        }
+
+        $conflict_teacher = null;
+        foreach ($items as $a) {
+            if ($a['teacher'] === $teacher && $a['role'] === $role && ($a['class'] ?? '') === $class_name) {
+                flash('Kiêm nhiệm này đã tồn tại cho GV này.', 'warning');
+                header('Location: ' . BASE_URL . 'them.php'); exit;
             }
-            if ($exists) flash('Kiêm nhiệm này đã tồn tại.', 'warning');
-            elseif ($conflict && !$force) flash("CẢNH BÁO: $role lớp $class_name đã giao cho $conflict.", 'warning');
-            else {
-                $items[] = ['id'=>date('YmdHis').substr(microtime(),2,4),'teacher'=>$teacher,'role'=>$role,'class'=>$class_name,'periods'=>$periods,'note'=>$note,'created_at'=>date('c')];
-                save_role_assignments($items);
-                flash("Đã thêm kiêm nhiệm: $teacher – $role" . ($class_name ? " ($class_name)" : '') . " ($periods tiết)", 'success');
+            if ($need_class && ($a['role'] === $role) && ($a['class'] ?? '') === $class_name && $a['teacher'] !== $teacher) {
+                $conflict_teacher = $a['teacher'];
             }
         }
-        redirect_ws('them');
+
+        if ($conflict_teacher && !$replace) {
+            $q = http_build_query([
+                'ask_replace_role' => 1, 'teacher' => $teacher, 'role' => $role,
+                'class' => $class_name, 'note' => $note, 'periods_manual' => $periods_manual,
+                'conflict' => $conflict_teacher,
+            ]);
+            header('Location: ' . BASE_URL . 'them.php?' . $q); exit;
+        }
+
+        if ($conflict_teacher && $replace && $need_class) {
+            $items = array_values(array_filter($items, fn($a) => !(($a['role']===$role) && (($a['class']??'')===$class_name))));
+        }
+
+        $items[] = [
+            'id' => date('YmdHis') . substr(microtime(), 2, 4),
+            'teacher' => $teacher, 'role' => $role, 'class' => $class_name,
+            'periods' => $periods, 'note' => $note, 'created_at' => date('c'),
+        ];
+        save_role_assignments($items);
+        flash("Đã thêm KN: $teacher – $role" . ($class_name ? " ($class_name)" : '') . ($conflict_teacher ? " — thay $conflict_teacher" : ''), $conflict_teacher ? 'warning' : 'success');
+        go_board();
     }
 
-    // ===== ĐỔI CHÉO =====
+    // Cập nhật phân công dạy (đổi môn/lớp/tiết/GV)
+    if ($action === 'update_day') {
+        $id = $_POST['id'] ?? '';
+        $list = get_assignments();
+        $found = false;
+        foreach ($list as &$a) {
+            if ($a['id'] !== $id) continue;
+            $a['teacher'] = trim($_POST['teacher'] ?? $a['teacher']);
+            $a['subject'] = trim($_POST['subject'] ?? $a['subject']);
+            $a['class'] = trim($_POST['class_name'] ?? $a['class']);
+            $pm = trim($_POST['periods'] ?? '');
+            if ($pm !== '' && is_numeric($pm)) $a['periods'] = round(floatval($pm), 2);
+            else {
+                $p = get_periods($a['subject'], $a['class']);
+                if ($p !== null) $a['periods'] = $p;
+            }
+            $a['note'] = trim($_POST['note'] ?? '');
+            $found = true;
+            break;
+        }
+        unset($a);
+        if ($found) { save_assignments($list); flash('Đã cập nhật phân công.', 'success'); }
+        else flash('Không tìm thấy.', 'danger');
+        go_board();
+    }
+
+    // Kéo-thả / chuyển 1 mục sang GV khác
+    if ($action === 'move_day') {
+        $id = $_POST['id'] ?? '';
+        $to = trim($_POST['to_teacher'] ?? '');
+        if ($id && $to) {
+            $list = get_assignments();
+            $moved = null;
+            foreach ($list as &$a) {
+                if ($a['id'] === $id) {
+                    // Nếu GV đích đã có cùng môn+lớp thì không chuyển
+                    foreach ($list as $b) {
+                        if ($b['id'] !== $id && $b['teacher'] === $to && $b['subject'] === $a['subject'] && $b['class'] === $a['class']) {
+                            flash("Không chuyển: $to đã có {$a['subject']} {$a['class']}.", 'warning');
+                            go_board();
+                        }
+                    }
+                    // Xóa trùng môn+lớp của người khác nếu tick replace (kéo thả mặc định thay thế)
+                    $subj = $a['subject']; $cls = $a['class'];
+                    $from = $a['teacher'];
+                    $a['teacher'] = $to;
+                    $moved = "$from → $to: $subj $cls";
+                    break;
+                }
+            }
+            unset($a);
+            // Sau khi đổi GV, gỡ các bản ghi trùng môn+lớp còn lại (không cho trùng)
+            if ($moved) {
+                $keep = [];
+                $seen = [];
+                // Ưu tiên giữ bản vừa chuyển (id)
+                foreach ($list as $a) {
+                    if ($a['id'] === $id) { $keep[] = $a; $seen[$a['subject'].'|'.$a['class']] = true; }
+                }
+                foreach ($list as $a) {
+                    if ($a['id'] === $id) continue;
+                    $k = $a['subject'].'|'.$a['class'];
+                    if (isset($seen[$k])) continue; // đã có người (bản vừa chuyển)
+                    $seen[$k] = true;
+                    $keep[] = $a;
+                }
+                save_assignments(array_values($keep));
+                flash("Đã chuyển: $moved", 'success');
+            }
+        }
+        go_board();
+    }
+
+    // Đổi chéo 2 GV toàn bộ
     if ($action === 'swap_all') {
         $t1 = trim($_POST['teacher1'] ?? ''); $t2 = trim($_POST['teacher2'] ?? '');
-        if (!$t1 || !$t2 || $t1 === $t2) flash('Chọn 2 giáo viên khác nhau.', 'danger');
+        if (!$t1 || !$t2 || $t1 === $t2) flash('Chọn 2 GV khác nhau.', 'danger');
         else {
-            $assignments = get_assignments(); $roles = get_role_assignments(); $nA = 0; $nR = 0;
+            $assignments = get_assignments(); $roles = get_role_assignments(); $nA=0;$nR=0;
             foreach ($assignments as &$a) {
-                if ($a['teacher'] === $t1) { $a['teacher'] = $t2; $nA++; }
-                elseif ($a['teacher'] === $t2) { $a['teacher'] = $t1; $nA++; }
+                if ($a['teacher']===$t1){$a['teacher']=$t2;$nA++;} elseif($a['teacher']===$t2){$a['teacher']=$t1;$nA++;}
             } unset($a);
             foreach ($roles as &$a) {
-                if ($a['teacher'] === $t1) { $a['teacher'] = $t2; $nR++; }
-                elseif ($a['teacher'] === $t2) { $a['teacher'] = $t1; $nR++; }
+                if ($a['teacher']===$t1){$a['teacher']=$t2;$nR++;} elseif($a['teacher']===$t2){$a['teacher']=$t1;$nR++;}
             } unset($a);
             save_assignments($assignments); save_role_assignments($roles);
-            flash("Đã đổi chéo $nA dạy + $nR KN: $t1 ↔ $t2", 'success');
+            flash("Đổi chéo $nA dạy + $nR KN: $t1 ↔ $t2", 'success');
         }
-        redirect_ws('doicheo');
-    }
-
-    if ($action === 'transfer') {
-        $from = trim($_POST['from'] ?? ''); $to = trim($_POST['to'] ?? ''); $ids = $_POST['ids'] ?? [];
-        if (!$from || !$to || $from === $to || empty($ids)) flash('Chọn GV nguồn, đích và ít nhất 1 mục.', 'warning');
-        else {
-            $assignments = get_assignments(); $n = 0;
-            foreach ($assignments as &$a) {
-                if ($a['teacher'] === $from && in_array($a['id'], $ids)) { $a['teacher'] = $to; $n++; }
-            } unset($a);
-            save_assignments($assignments);
-            flash("Đã chuyển $n phân công: $from → $to", 'success');
-        }
-        redirect_ws('doicheo');
-    }
-
-    if ($action === 'swap_one') {
-        $id1 = $_POST['id1'] ?? ''; $id2 = $_POST['id2'] ?? '';
-        $list = get_assignments(); $i1 = $i2 = null;
-        foreach ($list as $i => $a) { if ($a['id'] === $id1) $i1 = $i; if ($a['id'] === $id2) $i2 = $i; }
-        if ($i1 === null || $i2 === null) flash('Không tìm thấy phân công.', 'danger');
-        else {
-            $tmp = $list[$i1]['teacher']; $list[$i1]['teacher'] = $list[$i2]['teacher']; $list[$i2]['teacher'] = $tmp;
-            save_assignments($list);
-            flash('Đã đổi chéo 2 phân công dạy môn.', 'success');
-        }
-        redirect_ws('doicheo');
+        go_board();
     }
 }
 
@@ -176,25 +304,15 @@ $day_by_t = [];
 foreach ($assignments as $a) $day_by_t[$a['teacher']][] = $a;
 $role_by_t = [];
 foreach ($role_items as $a) $role_by_t[$a['teacher']][] = $a;
-$board_names = sort_teachers_by_ten(array_unique(array_merge(array_keys($day_by_t), array_keys($role_by_t), $teachers)));
+$board_names = sort_teachers_by_ten(array_unique(array_merge($teachers, array_keys($day_by_t), array_keys($role_by_t))));
 
-// --- Rà soát nhanh ---
+// Rà soát
 $slot = [];
 foreach ($assignments as $a) $slot[$a['subject'].'|'.$a['class']][] = $a['teacher'];
 $conflicts = [];
 foreach ($slot as $k => $list) {
     $u = array_values(array_unique($list));
-    if (count($u) > 1) { [$s,$c] = explode('|',$k,2); $conflicts[] = ['subject'=>$s,'class'=>$c,'teachers'=>$u]; }
-}
-$role_slot = [];
-foreach ($role_items as $a) {
-    if (empty($a['class'])) continue;
-    $role_slot[$a['role'].'|'.$a['class']][] = $a['teacher'];
-}
-$role_conflicts = [];
-foreach ($role_slot as $k => $list) {
-    $u = array_values(array_unique($list));
-    if (count($u) > 1) { [$r,$c] = explode('|',$k,2); $role_conflicts[] = ['role'=>$r,'class'=>$c,'teachers'=>$u]; }
+    if (count($u) > 1) { [$s,$c] = explode('|',$k,2); $conflicts[] = compact('s') + ['subject'=>$s,'class'=>$c,'teachers'=>$u]; }
 }
 $missing = [];
 foreach ($classes as $cls) {
@@ -202,339 +320,412 @@ foreach ($classes as $cls) {
     foreach ($all_subjects as $sub => $grades) {
         if (!isset($grades[$grade]) || floatval($grades[$grade]) <= 0) continue;
         $found = false;
-        foreach ($assignments as $a) if ($a['subject']===$sub && $a['class']===$cls) { $found = true; break; }
+        foreach ($assignments as $a) if ($a['subject']===$sub && $a['class']===$cls) { $found=true; break; }
         if (!$found) $missing[] = ['subject'=>$sub,'class'=>$cls,'periods'=>$grades[$grade]];
     }
 }
-$under = []; $over = [];
+$under=[]; $over=[];
 foreach ($teachers as $t) {
-    $total = $loads[$t]['total'] ?? 0;
-    $quota = get_quota($t);
-    $diff = $total - $quota;
+    $total = $loads[$t]['total'] ?? 0; $quota = get_quota($t); $diff = $total - $quota;
     $item = ['teacher'=>$t,'level'=>get_teacher_level($t),'total'=>$total,'quota'=>$quota,'diff'=>$diff];
-    if ($diff < -0.05) $under[] = $item;
-    elseif ($diff > 0.05) $over[] = $item;
+    if ($diff < -0.05) $under[] = $item; elseif ($diff > 0.05) $over[] = $item;
 }
-$n_conflict = count($conflicts) + count($role_conflicts);
+$n_conflict = count($conflicts);
+
+// Popup thay thế?
+$ask_replace = !empty($_GET['ask_replace']);
+$ask_replace_role = !empty($_GET['ask_replace_role']);
 ?>
 
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-<h3 class="mb-0"><i class="bi bi-clipboard-check"></i> Bàn làm việc phân công</h3>
-<span class="text-muted small">Thêm · Theo dõi · Đổi chéo · Rà soát trên cùng màn hình</span>
+<style>
+.ws-sticky-tools{position:sticky;top:0;z-index:50;background:#f0f4f8;padding:.5rem 0;margin-bottom:.5rem}
+.board-drop{min-height:36px;border-radius:8px;transition:background .15s}
+.board-drop.drag-over{background:#d4edda;outline:2px dashed #198754}
+.chip[draggable=true]{cursor:grab}
+.chip[draggable=true]:active{cursor:grabbing;opacity:.75}
+.chip-clickable{cursor:pointer}
+.chip-clickable:hover{box-shadow:0 0 0 2px var(--primary)}
+.board-scroll{max-height:calc(100vh - 380px);min-height:280px;overflow:auto}
+@media (max-width:768px){.board-scroll{max-height:none}}
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+<h3 class="mb-0"><i class="bi bi-clipboard-check"></i> Phân công</h3>
+<div class="d-flex flex-wrap gap-1">
+<button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalAudit">
+<i class="bi bi-search"></i> Rà soát
+<?php if ($n_conflict || $missing || $under || $over): ?>
+<span class="badge bg-danger"><?= $n_conflict + count($missing) ?></span>
+<?php endif; ?>
+</button>
+<button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#modalSwap">
+<i class="bi bi-arrow-left-right"></i> Đổi chéo GV
+</button>
+</div>
 </div>
 
-<!-- TÓM TẮT CẢNH BÁO -->
-<div class="row g-2 mb-3">
-<a href="#rasoat" class="col text-decoration-none"><div class="card stat-card py-2 <?= $n_conflict?'border border-danger':'' ?>"><div class="number fs-5 <?= $n_conflict?'text-danger':'' ?>"><?= $n_conflict ?></div><div class="label">Trùng</div></div></a>
-<a href="#rasoat" class="col text-decoration-none"><div class="card stat-card py-2"><div class="number fs-5 text-warning"><?= count($missing) ?></div><div class="label">Thiếu môn</div></div></a>
-<a href="#rasoat" class="col text-decoration-none"><div class="card stat-card py-2"><div class="number fs-5 text-warning"><?= count($under) ?></div><div class="label">Thiếu tiết</div></div></a>
-<a href="#rasoat" class="col text-decoration-none"><div class="card stat-card py-2"><div class="number fs-5 text-danger"><?= count($over) ?></div><div class="label">Thừa tiết</div></div></a>
-<a href="#bang" class="col text-decoration-none"><div class="card stat-card py-2"><div class="number fs-5"><?= count($assignments) ?></div><div class="label">PC dạy</div></div></a>
-<a href="#bang" class="col text-decoration-none"><div class="card stat-card py-2"><div class="number fs-5"><?= count($role_items) ?></div><div class="label">Kiêm nhiệm</div></div></a>
-</div>
-
-<?php if ($n_conflict > 0): ?>
-<div class="danger-box"><i class="bi bi-exclamation-octagon-fill"></i> <strong>Cảnh báo:</strong> Có <?= $n_conflict ?> trường hợp trùng phân công. <a href="#rasoat" class="fw-semibold">Xem chi tiết ↓</a></div>
+<?php if ($n_conflict): ?>
+<div class="danger-box py-2"><i class="bi bi-exclamation-octagon-fill"></i> Có <strong><?= $n_conflict ?></strong> trùng môn+lớp. <a href="#" data-bs-toggle="modal" data-bs-target="#modalAudit">Xem rà soát</a></div>
 <?php endif; ?>
 
-<!-- TAB ĐIỀU HƯỚNG NỘI BỘ -->
-<ul class="nav nav-pills flex-wrap gap-1 mb-3" id="wsTabs">
-<li class="nav-item"><a class="nav-link active" data-bs-toggle="pill" href="#them"><i class="bi bi-plus-circle"></i> Thêm</a></li>
-<li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#bang"><i class="bi bi-table"></i> Bảng GV</a></li>
-<li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#doicheo"><i class="bi bi-arrow-left-right"></i> Đổi chéo</a></li>
-<li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#rasoat"><i class="bi bi-search"></i> Rà soát</a></li>
+<!-- ===== FORM THÊM (cố định trên) ===== -->
+<div class="card mb-3">
+<div class="card-header d-flex justify-content-between align-items-center">
+<span><i class="bi bi-plus-circle"></i> Thêm phân công</span>
+<ul class="nav nav-pills card-header-pills gap-1 mb-0">
+<li class="nav-item"><button type="button" class="nav-link active py-1 px-2" data-bs-toggle="tab" data-bs-target="#tabDay" style="color:inherit">Dạy môn</button></li>
+<li class="nav-item"><button type="button" class="nav-link py-1 px-2" data-bs-toggle="tab" data-bs-target="#tabRole" style="color:inherit">Kiêm nhiệm</button></li>
+<li class="nav-item"><button type="button" class="nav-link py-1 px-2" data-bs-toggle="tab" data-bs-target="#tabMulti" style="color:inherit">Nhiều lớp</button></li>
 </ul>
-
+</div>
+<div class="card-body py-3">
 <div class="tab-content">
 
-<!-- ===== THÊM ===== -->
-<div class="tab-pane fade show active" id="them">
-<ul class="nav nav-tabs mb-3">
-<li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#daymon">Dạy môn</a></li>
-<li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#kiemnhiem">Kiêm nhiệm</a></li>
-</ul>
-<div class="tab-content">
-<div class="tab-pane fade show active" id="daymon">
-<div class="row">
-<div class="col-lg-6 mb-3">
-<div class="card"><div class="card-header"><i class="bi bi-plus-circle"></i> Thêm 1 phân công dạy</div>
-<div class="card-body">
-<form method="post">
+<div class="tab-pane fade show active" id="tabDay">
+<form method="post" id="formAddOne" class="row g-2 align-items-end">
 <input type="hidden" name="action" value="add_one">
-<div class="mb-2"><label class="form-label fw-semibold small">Giáo viên *</label>
-<select name="teacher" class="form-select form-select-sm" required><option value="">-- Chọn --</option>
-<?php foreach ($teachers as $t): ?><option value="<?= e($t) ?>"><?= e($t) ?></option><?php endforeach; ?></select></div>
-<div class="mb-2"><label class="form-label fw-semibold small">Môn *</label>
-<select name="subject" id="subject" class="form-select form-select-sm" required><option value="">-- Chọn --</option>
-<?php foreach ($subjects as $s): ?><option value="<?= e($s) ?>"><?= e($s) ?></option><?php endforeach; ?></select></div>
-<div class="mb-2"><label class="form-label fw-semibold small">Lớp *</label>
-<select name="class_name" id="class_name" class="form-select form-select-sm" required><option value="">-- Chọn --</option>
-<?php foreach ($classes as $c): ?><option value="<?= e($c) ?>"><?= e($c) ?></option><?php endforeach; ?></select></div>
-<div class="mb-2"><div id="periods-display" class="alert alert-success py-1 px-2 d-none small">Số tiết: <strong id="periods-value">0</strong></div>
-<div id="periods-manual-wrap" class="d-none"><input type="number" name="periods_manual" class="form-control form-control-sm" step="0.01" min="0" placeholder="Số tiết thủ công"></div></div>
-<div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="force" id="force1" value="1">
-<label class="form-check-label text-danger small" for="force1">Vẫn thêm nếu đã giao người khác</label></div>
-<button class="btn btn-primary btn-sm w-100"><i class="bi bi-save"></i> Lưu</button>
-</form></div></div></div>
+<input type="hidden" name="replace" id="replaceOne" value="">
+<div class="col-md-3"><label class="form-label small mb-0 fw-semibold">Giáo viên *</label>
+<select name="teacher" id="addTeacher" class="form-select form-select-sm" required>
+<option value="">-- Chọn --</option>
+<?php foreach ($teachers as $t): ?><option value="<?= e($t) ?>" <?= ($_GET['teacher']??'')===$t?'selected':'' ?>><?= e($t) ?></option><?php endforeach; ?>
+</select></div>
+<div class="col-md-2"><label class="form-label small mb-0 fw-semibold">Môn *</label>
+<select name="subject" id="subject" class="form-select form-select-sm" required>
+<option value="">--</option>
+<?php foreach ($subjects as $s): ?><option value="<?= e($s) ?>" <?= ($_GET['subject']??'')===$s?'selected':'' ?>><?= e($s) ?></option><?php endforeach; ?>
+</select></div>
+<div class="col-md-2"><label class="form-label small mb-0 fw-semibold">Lớp *</label>
+<select name="class_name" id="class_name" class="form-select form-select-sm" required>
+<option value="">--</option>
+<?php foreach ($classes as $c): ?><option value="<?= e($c) ?>" <?= ($_GET['class']??'')===$c?'selected':'' ?>><?= e($c) ?></option><?php endforeach; ?>
+</select></div>
+<div class="col-md-2"><label class="form-label small mb-0 fw-semibold">Số tiết</label>
+<div id="periods-display" class="small text-success d-none">Tự động: <b id="periods-value">0</b></div>
+<input type="number" name="periods_manual" id="periods_manual" class="form-control form-control-sm d-none" step="0.01" min="0" value="<?= e($_GET['periods_manual']??'') ?>" placeholder="Thủ công">
+</div>
+<div class="col-md-2"><label class="form-label small mb-0">Ghi chú</label>
+<input type="text" name="note" class="form-control form-control-sm" value="<?= e($_GET['note']??'') ?>"></div>
+<div class="col-md-1"><button class="btn btn-primary btn-sm w-100">Lưu</button></div>
+</form>
+</div>
 
-<div class="col-lg-6 mb-3">
-<div class="card"><div class="card-header bg-success"><i class="bi bi-lightning"></i> Thêm nhanh nhiều lớp</div>
-<div class="card-body">
-<form method="post">
+<div class="tab-pane fade" id="tabMulti">
+<form method="post" class="row g-2">
 <input type="hidden" name="action" value="add_multi">
-<div class="mb-2"><select name="teacher" class="form-select form-select-sm" required><option value="">-- Giáo viên --</option>
+<input type="hidden" name="replace" value="1">
+<div class="col-md-3"><select name="teacher" class="form-select form-select-sm" required><option value="">-- GV --</option>
 <?php foreach ($teachers as $t): ?><option value="<?= e($t) ?>"><?= e($t) ?></option><?php endforeach; ?></select></div>
-<div class="mb-2"><select name="subject" class="form-select form-select-sm" required><option value="">-- Môn --</option>
+<div class="col-md-2"><select name="subject" class="form-select form-select-sm" required><option value="">-- Môn --</option>
 <?php foreach ($subjects as $s): ?><option value="<?= e($s) ?>"><?= e($s) ?></option><?php endforeach; ?></select></div>
-<div class="mb-2 row g-1">
+<div class="col-md-5"><div class="d-flex flex-wrap gap-2">
 <?php foreach ($classes as $c): ?>
-<div class="col-3"><div class="form-check"><input class="form-check-input" type="checkbox" name="classes[]" value="<?= e($c) ?>" id="c<?= e($c) ?>">
-<label class="form-check-label small" for="c<?= e($c) ?>"><?= e($c) ?></label></div></div>
+<label class="form-check-label small border rounded px-2 py-1 bg-white"><input type="checkbox" name="classes[]" value="<?= e($c) ?>" class="form-check-input me-1"> <?= e($c) ?></label>
 <?php endforeach; ?>
+</div><div class="form-text">Trùng môn+lớp sẽ <strong>tự thay thế</strong> GV cũ.</div></div>
+<div class="col-md-2"><button class="btn btn-success btn-sm w-100">Thêm</button></div>
+</form>
 </div>
-<div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="force" id="force2" value="1">
-<label class="form-check-label text-danger small" for="force2">Vẫn thêm lớp đã giao người khác</label></div>
-<button class="btn btn-success btn-sm w-100"><i class="bi bi-lightning-fill"></i> Thêm tất cả</button>
-</form></div></div></div>
-</div></div>
 
-<div class="tab-pane fade" id="kiemnhiem">
-<div class="col-lg-6">
-<div class="card"><div class="card-header bg-info"><i class="bi bi-person-badge"></i> Thêm kiêm nhiệm</div>
-<div class="card-body">
-<form method="post">
+<div class="tab-pane fade" id="tabRole">
+<form method="post" id="formAddRole" class="row g-2 align-items-end">
 <input type="hidden" name="action" value="add_role">
-<div class="mb-2"><select name="teacher" class="form-select form-select-sm" required><option value="">-- Giáo viên --</option>
-<?php foreach ($teachers as $t): ?><option value="<?= e($t) ?>"><?= e($t) ?></option><?php endforeach; ?></select></div>
-<div class="mb-2"><select name="role" id="roleSelect" class="form-select form-select-sm" required><option value="">-- Chức vụ --</option>
+<input type="hidden" name="replace" id="replaceRole" value="">
+<div class="col-md-3"><select name="teacher" class="form-select form-select-sm" required><option value="">-- GV --</option>
+<?php foreach ($teachers as $t): ?><option value="<?= e($t) ?>" <?= ($_GET['teacher']??'')===$t?'selected':'' ?>><?= e($t) ?></option><?php endforeach; ?></select></div>
+<div class="col-md-3"><select name="role" id="roleSelect" class="form-select form-select-sm" required><option value="">-- Chức vụ --</option>
 <?php foreach ($roles as $r): ?>
-<option value="<?= e($r['name']) ?>" data-need-class="<?= !empty($r['need_class'])?'1':'0' ?>" data-periods="<?= e($r['periods']??0) ?>"><?= e($r['name']) ?> (<?= e($r['periods']??0) ?>t)</option>
+<option value="<?= e($r['name']) ?>" data-need-class="<?= !empty($r['need_class'])?'1':'0' ?>" data-periods="<?= e($r['periods']??0) ?>" <?= ($_GET['role']??'')===$r['name']?'selected':'' ?>><?= e($r['name']) ?> (<?= e($r['periods']??0) ?>t)</option>
 <?php endforeach; ?></select></div>
-<div class="mb-2" id="roleClassWrap"><select name="class_name" class="form-select form-select-sm"><option value="">-- Lớp (nếu cần) --</option>
-<?php foreach ($classes as $c): ?><option value="<?= e($c) ?>"><?= e($c) ?></option><?php endforeach; ?></select></div>
-<div class="mb-2"><div id="rolePeriodsDisplay" class="alert alert-success py-1 px-2 d-none small">Chuẩn: <strong id="rolePeriodsValue">0</strong></div>
-<input type="number" name="periods_manual" class="form-control form-control-sm" step="0.01" min="0" placeholder="Để trống = số tiết chuẩn"></div>
-<div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="force" id="force3" value="1">
-<label class="form-check-label text-danger small" for="force3">Vẫn thêm nếu đã giao người khác</label></div>
-<button class="btn btn-info btn-sm w-100"><i class="bi bi-save"></i> Lưu kiêm nhiệm</button>
-</form></div></div></div>
-</div></div>
+<div class="col-md-2" id="roleClassWrap"><select name="class_name" class="form-select form-select-sm"><option value="">-- Lớp --</option>
+<?php foreach ($classes as $c): ?><option value="<?= e($c) ?>" <?= ($_GET['class']??'')===$c?'selected':'' ?>><?= e($c) ?></option><?php endforeach; ?></select></div>
+<div class="col-md-2"><input type="number" name="periods_manual" class="form-control form-control-sm" step="0.01" min="0" placeholder="Tiết (tuỳ chọn)" value="<?= e($_GET['periods_manual']??'') ?>"></div>
+<div class="col-md-2"><button class="btn btn-info btn-sm w-100">Lưu KN</button></div>
+</form>
 </div>
 
-<!-- ===== BẢNG GV ===== -->
-<div class="tab-pane fade" id="bang">
-<div class="card">
+</div></div></div>
+
+<!-- ===== BẢNG (cố định dưới) ===== -->
+<div class="card" id="board">
 <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-<span><i class="bi bi-table"></i> Bảng theo dõi (<?= count($board_names) ?> GV)</span>
-<input type="search" id="boardFilter" class="form-control form-control-sm" style="max-width:220px" placeholder="Lọc tên / môn / lớp...">
+<span><i class="bi bi-table"></i> Bảng phân công — kéo thả chip sang GV khác · bấm chip để sửa</span>
+<input type="search" id="boardFilter" class="form-control form-control-sm" style="max-width:200px" placeholder="Lọc GV / môn / lớp">
 </div>
-<div class="card-body" id="boardBody" style="max-height:70vh;overflow:auto">
+<div class="card-body board-scroll" id="boardBody">
 <?php foreach ($board_names as $t):
     $load = $loads[$t] ?? ['day'=>0,'role'=>0,'total'=>0,'quota'=>get_quota($t),'diff'=>-get_quota($t),'level'=>get_teacher_level($t)];
     $diffClass = abs($load['diff']) < 0.01 ? 'diff-ok' : ($load['diff'] > 0 ? 'diff-over' : 'diff-under');
-    $search = mb_strtolower($t . ' ' . ($load['mon_day']??'') . ' ' . implode(' ', array_column($day_by_t[$t]??[], 'subject')) . ' ' . implode(' ', array_column($day_by_t[$t]??[], 'class')), 'UTF-8');
+    $search = mb_strtolower($t, 'UTF-8');
+    foreach ($day_by_t[$t] ?? [] as $a) $search .= ' ' . mb_strtolower($a['subject'].' '.$a['class'], 'UTF-8');
 ?>
-<div class="board-row" data-search="<?= e($search) ?>">
+<div class="board-row" data-search="<?= e($search) ?>" data-teacher="<?= e($t) ?>">
 <div class="d-flex flex-wrap justify-content-between gap-2 mb-1">
-<strong><?= e($t) ?></strong>
+<strong class="teacher-name"><?= e($t) ?></strong>
 <span class="small">
 <span class="badge bg-secondary"><?= e($load['level']??'THCS') ?></span>
-Dạy <b><?= number_format($load['day'],2) ?></b> · KN <b><?= number_format($load['role'],2) ?></b> · Tổng <b><?= number_format($load['total'],2) ?></b>/<?= number_format($load['quota'],0) ?>
+Dạy <b><?= number_format($load['day'],2) ?></b> · KN <b><?= number_format($load['role'],2) ?></b> ·
+Tổng <b><?= number_format($load['total'],2) ?></b>/<?= number_format($load['quota'],0) ?>
 <span class="<?= $diffClass ?>"><?= $load['diff']>0?'+':'' ?><?= number_format($load['diff'],2) ?></span>
-</span></div>
-<div class="mb-1"><span class="text-muted small me-1">Dạy:</span>
+</span>
+</div>
+<div class="board-drop mb-1" data-teacher="<?= e($t) ?>" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="onDropChip(event, this)">
+<span class="text-muted small me-1">Dạy:</span>
 <?php if (!empty($day_by_t[$t])): foreach ($day_by_t[$t] as $a): ?>
-<span class="chip"><?= e($a['subject']) ?> <?= e($a['class']) ?> (<?= e($a['periods']) ?>t)
-<form method="post" class="d-inline" onsubmit="return confirm('Xóa phân công này?')">
-<input type="hidden" name="action" value="delete_day"><input type="hidden" name="id" value="<?= e($a['id']) ?>">
-<button type="submit" class="chip-x" title="Xóa">×</button></form></span>
-<?php endforeach; else: ?><span class="text-muted small">—</span><?php endif; ?></div>
-<div><span class="text-muted small me-1">KN:</span>
+<span class="chip chip-clickable" draggable="true"
+  data-id="<?= e($a['id']) ?>" data-type="day"
+  data-teacher="<?= e($a['teacher']) ?>" data-subject="<?= e($a['subject']) ?>"
+  data-class="<?= e($a['class']) ?>" data-periods="<?= e($a['periods']) ?>" data-note="<?= e($a['note']??'') ?>"
+  ondragstart="onDragChip(event)" onclick="openChipModal(this)">
+<?= e($a['subject']) ?> <?= e($a['class']) ?> (<?= e($a['periods']) ?>t)
+</span>
+<?php endforeach; else: ?><span class="text-muted small drop-hint">— kéo chip vào đây</span><?php endif; ?>
+</div>
+<div>
+<span class="text-muted small me-1">KN:</span>
 <?php if (!empty($role_by_t[$t])): foreach ($role_by_t[$t] as $a): ?>
-<span class="chip chip-role"><?= e($a['role']) ?><?= !empty($a['class'])?' '.e($a['class']):'' ?> (<?= e($a['periods']??0) ?>t)
-<form method="post" class="d-inline" onsubmit="return confirm('Xóa kiêm nhiệm này?')">
+<span class="chip chip-role">
+<?= e($a['role']) ?><?= !empty($a['class'])?' '.e($a['class']):'' ?> (<?= e($a['periods']??0) ?>t)
+<form method="post" class="d-inline" onsubmit="return confirm('Xóa kiêm nhiệm?')">
 <input type="hidden" name="action" value="delete_role"><input type="hidden" name="id" value="<?= e($a['id']) ?>">
-<button type="submit" class="chip-x" title="Xóa">×</button></form></span>
-<?php endforeach; else: ?><span class="text-muted small">—</span><?php endif; ?></div>
+<button type="submit" class="chip-x" title="Xóa" onclick="event.stopPropagation()">×</button></form>
+</span>
+<?php endforeach; else: ?><span class="text-muted small">—</span><?php endif; ?>
+</div>
 </div>
 <?php endforeach; ?>
+</div>
+<div class="card-footer small text-muted">Kéo chip dạy môn sang dòng GV khác để chuyển · Bấm chip để sửa / xóa / đổi</div>
+</div>
+
+<!-- Form ẩn kéo-thả -->
+<form method="post" id="formMove" class="d-none">
+<input type="hidden" name="action" value="move_day">
+<input type="hidden" name="id" id="moveId">
+<input type="hidden" name="to_teacher" id="moveTo">
+</form>
+
+<!-- Modal thao tác chip -->
+<div class="modal fade" id="modalChip" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title"><i class="bi bi-pencil-square"></i> Sửa phân công</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<form method="post">
+<input type="hidden" name="action" value="update_day">
+<input type="hidden" name="id" id="chipId">
+<div class="modal-body">
+<div class="mb-2"><label class="form-label small fw-semibold">Giáo viên</label>
+<select name="teacher" id="chipTeacher" class="form-select form-select-sm">
+<?php foreach ($teachers as $t): ?><option value="<?= e($t) ?>"><?= e($t) ?></option><?php endforeach; ?>
+</select></div>
+<div class="mb-2"><label class="form-label small fw-semibold">Môn</label>
+<select name="subject" id="chipSubject" class="form-select form-select-sm">
+<?php foreach ($subjects as $s): ?><option value="<?= e($s) ?>"><?= e($s) ?></option><?php endforeach; ?>
+</select></div>
+<div class="mb-2"><label class="form-label small fw-semibold">Lớp</label>
+<select name="class_name" id="chipClass" class="form-select form-select-sm">
+<?php foreach ($classes as $c): ?><option value="<?= e($c) ?>"><?= e($c) ?></option><?php endforeach; ?>
+</select></div>
+<div class="mb-2"><label class="form-label small fw-semibold">Số tiết</label>
+<input type="number" name="periods" id="chipPeriods" class="form-control form-control-sm" step="0.01" min="0"></div>
+<div class="mb-2"><label class="form-label small">Ghi chú</label>
+<input type="text" name="note" id="chipNote" class="form-control form-control-sm"></div>
+</div>
+<div class="modal-footer justify-content-between">
+<button type="button" class="btn btn-outline-danger btn-sm" id="btnChipDelete">Xóa</button>
+<div>
+<button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button>
+<button type="submit" class="btn btn-primary btn-sm">Lưu thay đổi</button>
+</div></div>
+</form>
+<form method="post" id="formChipDelete" class="d-none">
+<input type="hidden" name="action" value="delete_day">
+<input type="hidden" name="id" id="chipDeleteId">
+</form>
 </div></div></div>
 
-<!-- ===== ĐỔI CHÉO ===== -->
-<div class="tab-pane fade" id="doicheo">
-<div class="warn-box"><i class="bi bi-exclamation-triangle-fill"></i> <strong>Cảnh báo:</strong> Đổi chéo / chuyển phân công <strong>không hoàn tác</strong> tự động. Nên tạo phiên bản ở Kết quả trước khi đổi hàng loạt.</div>
-<div class="row g-3">
-<div class="col-lg-6">
-<div class="card h-100"><div class="card-header bg-warning"><i class="bi bi-people"></i> Đổi toàn bộ 2 GV</div>
-<div class="card-body">
-<form method="post" id="formSwapAll"><input type="hidden" name="action" value="swap_all">
-<select name="teacher1" class="form-select form-select-sm mb-2" required><option value="">-- GV A --</option>
-<?php foreach ($teachers as $t): $ld=$loads[$t]??null; ?><option value="<?= e($t) ?>"><?= e($t) ?> (<?= $ld?number_format($ld['total'],2):'0' ?>t)</option><?php endforeach; ?></select>
-<div class="text-center text-muted small my-1"><i class="bi bi-arrow-down-up"></i></div>
-<select name="teacher2" class="form-select form-select-sm mb-3" required><option value="">-- GV B --</option>
-<?php foreach ($teachers as $t): $ld=$loads[$t]??null; ?><option value="<?= e($t) ?>"><?= e($t) ?> (<?= $ld?number_format($ld['total'],2):'0' ?>t)</option><?php endforeach; ?></select>
-<button type="button" class="btn btn-warning btn-sm w-100" data-bs-toggle="modal" data-bs-target="#modalSwapAll">Đổi chéo toàn bộ</button>
-</form></div></div></div>
-
-<div class="col-lg-6">
-<div class="card h-100"><div class="card-header bg-success"><i class="bi bi-box-arrow-right"></i> Chuyển một phần dạy môn</div>
-<div class="card-body">
-<form method="post" id="formTransfer"><input type="hidden" name="action" value="transfer">
-<div class="row g-2 mb-2">
-<div class="col-6"><select name="from" id="fromT" class="form-select form-select-sm" required><option value="">Từ GV</option>
-<?php foreach ($teachers as $t): ?><option value="<?= e($t) ?>"><?= e($t) ?></option><?php endforeach; ?></select></div>
-<div class="col-6"><select name="to" class="form-select form-select-sm" required><option value="">Sang GV</option>
-<?php foreach ($teachers as $t): ?><option value="<?= e($t) ?>"><?= e($t) ?></option><?php endforeach; ?></select></div>
+<!-- Modal thay thế khi trùng -->
+<div class="modal fade" id="modalReplace" tabindex="-1" data-bs-backdrop="static"><div class="modal-dialog"><div class="modal-content">
+<div class="modal-header bg-warning"><h5 class="modal-title"><i class="bi bi-exclamation-triangle"></i> Trùng phân công</h5></div>
+<div class="modal-body">
+<p>Môn <strong id="rpSubject"></strong> lớp <strong id="rpClass"></strong> đã giao cho <strong id="rpConflict" class="text-danger"></strong>.</p>
+<p class="mb-0">Bạn có muốn <strong>thay thế</strong>? (Phân công của người kia sẽ bị gỡ, giao cho <strong id="rpNew"></strong>.)</p>
 </div>
-<div id="transferList" class="border rounded p-2 mb-2 small" style="max-height:160px;overflow:auto;background:#fafbfc">Chọn GV nguồn…</div>
-<button type="button" class="btn btn-success btn-sm w-100" data-bs-toggle="modal" data-bs-target="#modalTransfer">Chuyển đã chọn</button>
-</form></div></div></div>
+<div class="modal-footer">
+<a href="<?= BASE_URL ?>them.php" class="btn btn-secondary">Không</a>
+<button type="button" class="btn btn-warning" id="btnDoReplace">Có, thay thế</button>
+</div>
+</div></div></div>
 
-<div class="col-12">
-<div class="card"><div class="card-header"><i class="bi bi-shuffle"></i> Đổi chéo 2 mục dạy cụ thể</div>
-<div class="card-body">
-<form method="post" id="formSwapOne" class="row g-2 align-items-end"><input type="hidden" name="action" value="swap_one">
-<div class="col-md-5"><select name="id1" class="form-select form-select-sm" required><option value="">-- Mục 1 --</option>
-<?php foreach ($assignments as $a): ?><option value="<?= e($a['id']) ?>"><?= e($a['teacher']) ?> · <?= e($a['subject']) ?> · <?= e($a['class']) ?></option><?php endforeach; ?></select></div>
-<div class="col-md-5"><select name="id2" class="form-select form-select-sm" required><option value="">-- Mục 2 --</option>
-<?php foreach ($assignments as $a): ?><option value="<?= e($a['id']) ?>"><?= e($a['teacher']) ?> · <?= e($a['subject']) ?> · <?= e($a['class']) ?></option><?php endforeach; ?></select></div>
-<div class="col-md-2"><button type="button" class="btn btn-outline-primary btn-sm w-100" data-bs-toggle="modal" data-bs-target="#modalSwapOne">Đổi</button></div>
-</form></div></div></div>
-</div></div>
+<!-- Modal rà soát -->
+<div class="modal fade" id="modalAudit" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title"><i class="bi bi-search"></i> Rà soát phân công</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+<div class="row g-2 mb-3 text-center">
+<div class="col"><div class="border rounded p-2"><div class="fs-4 fw-bold text-danger"><?= $n_conflict ?></div><div class="small">Trùng</div></div></div>
+<div class="col"><div class="border rounded p-2"><div class="fs-4 fw-bold text-warning"><?= count($missing) ?></div><div class="small">Thiếu môn</div></div></div>
+<div class="col"><div class="border rounded p-2"><div class="fs-4 fw-bold text-warning"><?= count($under) ?></div><div class="small">Thiếu tiết</div></div></div>
+<div class="col"><div class="border rounded p-2"><div class="fs-4 fw-bold text-danger"><?= count($over) ?></div><div class="small">Thừa tiết</div></div></div>
+</div>
 
-<!-- ===== RÀ SOÁT ===== -->
-<div class="tab-pane fade" id="rasoat">
-<div class="row g-3">
-<div class="col-lg-6">
-<div class="card mb-3"><div class="card-header bg-danger"><i class="bi bi-exclamation-triangle"></i> Trùng môn + lớp (<?= count($conflicts) ?>)</div>
-<div class="card-body p-0" style="max-height:220px;overflow:auto">
-<?php if ($conflicts): ?><table class="table table-sm mb-0"><thead><tr><th>Môn</th><th>Lớp</th><th>GV</th></tr></thead><tbody>
+<h6 class="text-danger">Trùng môn + lớp</h6>
+<?php if ($conflicts): ?><table class="table table-sm"><thead><tr><th>Môn</th><th>Lớp</th><th>GV</th></tr></thead><tbody>
 <?php foreach ($conflicts as $c): ?><tr class="table-warning"><td><?= e($c['subject']) ?></td><td><?= e($c['class']) ?></td><td><?= e(implode(', ',$c['teachers'])) ?></td></tr><?php endforeach; ?>
-</tbody></table><?php else: ?><div class="p-3 text-success small"><i class="bi bi-check-circle"></i> Không trùng</div><?php endif; ?>
-</div></div>
-<div class="card mb-3"><div class="card-header bg-danger">Trùng kiêm nhiệm + lớp (<?= count($role_conflicts) ?>)</div>
-<div class="card-body p-0">
-<?php if ($role_conflicts): ?><table class="table table-sm mb-0"><thead><tr><th>Chức vụ</th><th>Lớp</th><th>GV</th></tr></thead><tbody>
-<?php foreach ($role_conflicts as $c): ?><tr class="table-warning"><td><?= e($c['role']) ?></td><td><?= e($c['class']) ?></td><td><?= e(implode(', ',$c['teachers'])) ?></td></tr><?php endforeach; ?>
-</tbody></table><?php else: ?><div class="p-3 text-success small"><i class="bi bi-check-circle"></i> Không trùng</div><?php endif; ?>
-</div></div>
-</div>
-<div class="col-lg-6">
-<div class="card mb-3"><div class="card-header">Thiếu môn + lớp (<?= count($missing) ?>)
-<input type="search" id="missFilter" class="form-control form-control-sm d-inline-block ms-2" style="max-width:160px;float:right" placeholder="Lọc..."></div>
-<div class="card-body p-0" style="max-height:280px;overflow:auto">
-<?php if ($missing): ?><table class="table table-sm table-striped mb-0" id="missTable"><thead><tr><th>Môn</th><th>Lớp</th><th>Tiết</th></tr></thead><tbody>
-<?php foreach ($missing as $m): ?><tr data-s="<?= e(mb_strtolower($m['subject'].' '.$m['class'],'UTF-8')) ?>"><td><?= e($m['subject']) ?></td><td><?= e($m['class']) ?></td><td><?= e($m['periods']) ?></td></tr><?php endforeach; ?>
-</tbody></table><?php else: ?><div class="p-3 text-success small">Không thiếu</div><?php endif; ?>
-</div></div>
-</div>
-<div class="col-md-6">
-<div class="card"><div class="card-header bg-warning text-dark">Thiếu tiết (<?= count($under) ?>)</div>
-<div class="card-body p-0" style="max-height:240px;overflow:auto"><table class="table table-sm mb-0"><thead><tr><th>GV</th><th>Tổng</th><th>ĐM</th><th>Thiếu</th></tr></thead><tbody>
-<?php foreach ($under as $u): ?><tr><td><?= e($u['teacher']) ?></td><td><?= number_format($u['total'],2) ?></td><td><?= number_format($u['quota'],0) ?></td><td class="diff-under"><?= number_format($u['diff'],2) ?></td></tr><?php endforeach; ?>
-<?php if (!$under): ?><tr><td colspan="4" class="text-muted text-center">Không có</td></tr><?php endif; ?>
-</tbody></table></div></div></div>
-<div class="col-md-6">
-<div class="card"><div class="card-header bg-danger">Thừa tiết (<?= count($over) ?>)</div>
-<div class="card-body p-0" style="max-height:240px;overflow:auto"><table class="table table-sm mb-0"><thead><tr><th>GV</th><th>Tổng</th><th>ĐM</th><th>Thừa</th></tr></thead><tbody>
-<?php foreach ($over as $u): ?><tr><td><?= e($u['teacher']) ?></td><td><?= number_format($u['total'],2) ?></td><td><?= number_format($u['quota'],0) ?></td><td class="diff-over">+<?= number_format($u['diff'],2) ?></td></tr><?php endforeach; ?>
-<?php if (!$over): ?><tr><td colspan="4" class="text-muted text-center">Không có</td></tr><?php endif; ?>
-</tbody></table></div></div></div>
-</div></div>
+</tbody></table><?php else: ?><p class="text-success small">Không trùng.</p><?php endif; ?>
 
-</div><!-- tab-content -->
+<h6>Thiếu môn + lớp <input type="search" id="missF" class="form-control form-control-sm d-inline-block" style="width:140px" placeholder="Lọc"></h6>
+<?php if ($missing): ?><div style="max-height:180px;overflow:auto"><table class="table table-sm" id="missTbl"><tbody>
+<?php foreach ($missing as $m): ?><tr data-s="<?= e(mb_strtolower($m['subject'].' '.$m['class'],'UTF-8')) ?>"><td><?= e($m['subject']) ?></td><td><?= e($m['class']) ?></td><td><?= e($m['periods']) ?>t</td></tr><?php endforeach; ?>
+</tbody></table></div><?php else: ?><p class="text-success small">Không thiếu.</p><?php endif; ?>
 
-<!-- MODALS -->
-<div class="modal fade" id="modalSwapAll" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
-<div class="modal-header bg-warning"><h5 class="modal-title">Xác nhận đổi chéo toàn bộ</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-<div class="modal-body"><p>Đổi <strong>toàn bộ</strong> dạy môn + kiêm nhiệm giữa 2 GV.</p><p class="text-danger mb-0"><strong>Không thể hoàn tác.</strong></p></div>
-<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-<button class="btn btn-warning" onclick="document.getElementById('formSwapAll').submit()">Đồng ý</button></div>
+<div class="row">
+<div class="col-md-6"><h6 class="text-warning">Thiếu tiết</h6>
+<table class="table table-sm"><tbody>
+<?php foreach ($under as $u): ?><tr><td><?= e($u['teacher']) ?></td><td><?= number_format($u['total'],2) ?>/<?= number_format($u['quota'],0) ?></td><td class="diff-under"><?= number_format($u['diff'],2) ?></td></tr><?php endforeach; ?>
+<?php if (!$under): ?><tr><td class="text-muted">Không có</td></tr><?php endif; ?>
+</tbody></table></div>
+<div class="col-md-6"><h6 class="text-danger">Thừa tiết</h6>
+<table class="table table-sm"><tbody>
+<?php foreach ($over as $u): ?><tr><td><?= e($u['teacher']) ?></td><td><?= number_format($u['total'],2) ?>/<?= number_format($u['quota'],0) ?></td><td class="diff-over">+<?= number_format($u['diff'],2) ?></td></tr><?php endforeach; ?>
+<?php if (!$over): ?><tr><td class="text-muted">Không có</td></tr><?php endif; ?>
+</tbody></table></div>
+</div>
+</div>
+<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button></div>
 </div></div></div>
 
-<div class="modal fade" id="modalTransfer" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
-<div class="modal-header bg-success text-white"><h5 class="modal-title">Xác nhận chuyển</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-<div class="modal-body"><p>Chuyển các mục đã chọn sang GV đích.</p><p class="text-danger mb-0"><strong>Không thể hoàn tác tự động.</strong></p></div>
-<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-<button class="btn btn-success" onclick="document.getElementById('formTransfer').submit()">Đồng ý</button></div>
-</div></div></div>
-
-<div class="modal fade" id="modalSwapOne" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
-<div class="modal-header"><h5 class="modal-title">Xác nhận đổi 2 mục</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-<div class="modal-body">Hai giáo viên của 2 phân công sẽ đổi cho nhau?</div>
-<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-<button class="btn btn-primary" onclick="document.getElementById('formSwapOne').submit()">Đồng ý</button></div>
+<!-- Modal đổi chéo -->
+<div class="modal fade" id="modalSwap" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+<div class="modal-header bg-warning"><h5 class="modal-title">Đổi chéo toàn bộ 2 GV</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<form method="post" onsubmit="return confirm('Đổi toàn bộ dạy + KN giữa 2 GV? Không hoàn tác!')">
+<input type="hidden" name="action" value="swap_all">
+<div class="modal-body">
+<div class="warn-box small">Đổi tất cả phân công dạy và kiêm nhiệm giữa 2 giáo viên.</div>
+<select name="teacher1" class="form-select form-select-sm mb-2" required><option value="">-- GV A --</option>
+<?php foreach ($teachers as $t): ?><option value="<?= e($t) ?>"><?= e($t) ?></option><?php endforeach; ?></select>
+<div class="text-center text-muted"><i class="bi bi-arrow-down-up"></i></div>
+<select name="teacher2" class="form-select form-select-sm mt-2" required><option value="">-- GV B --</option>
+<?php foreach ($teachers as $t): ?><option value="<?= e($t) ?>"><?= e($t) ?></option><?php endforeach; ?></select>
+</div>
+<div class="modal-footer">
+<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+<button type="submit" class="btn btn-warning">Đổi chéo</button>
+</div></form>
 </div></div></div>
 
 <script>
-// Số tiết dạy
+// Số tiết
 const subjectSelect = document.getElementById('subject');
 const classSelect = document.getElementById('class_name');
 const periodsDisplay = document.getElementById('periods-display');
 const periodsValue = document.getElementById('periods-value');
-const periodsManualWrap = document.getElementById('periods-manual-wrap');
+const periodsManual = document.getElementById('periods_manual');
 function fetchPeriods() {
   const subject = subjectSelect?.value, cls = classSelect?.value;
-  if (!subject || !cls) { periodsDisplay?.classList.add('d-none'); periodsManualWrap?.classList.add('d-none'); return; }
+  if (!subject || !cls) { periodsDisplay?.classList.add('d-none'); periodsManual?.classList.add('d-none'); return; }
   fetch('<?= BASE_URL ?>api/periods.php?subject=' + encodeURIComponent(subject) + '&class=' + encodeURIComponent(cls))
     .then(r => r.json()).then(data => {
       if (data.periods !== null && data.periods !== undefined) {
-        periodsValue.textContent = data.periods; periodsDisplay.classList.remove('d-none'); periodsManualWrap.classList.add('d-none');
-      } else { periodsDisplay.classList.add('d-none'); periodsManualWrap.classList.remove('d-none'); }
+        periodsValue.textContent = data.periods;
+        periodsDisplay.classList.remove('d-none');
+        periodsManual.classList.add('d-none');
+      } else {
+        periodsDisplay.classList.add('d-none');
+        periodsManual.classList.remove('d-none');
+      }
     });
 }
-if (subjectSelect) { subjectSelect.addEventListener('change', fetchPeriods); classSelect.addEventListener('change', fetchPeriods); }
-const roleSelect = document.getElementById('roleSelect');
-function onRoleChange() {
-  const opt = roleSelect?.options[roleSelect.selectedIndex];
-  if (!opt || !opt.value) { document.getElementById('rolePeriodsDisplay')?.classList.add('d-none'); return; }
-  document.getElementById('roleClassWrap').style.opacity = opt.dataset.needClass === '1' ? '1' : '0.55';
-  document.getElementById('rolePeriodsValue').textContent = opt.dataset.periods || 0;
-  document.getElementById('rolePeriodsDisplay').classList.remove('d-none');
-}
-if (roleSelect) roleSelect.addEventListener('change', onRoleChange);
+if (subjectSelect) { subjectSelect.addEventListener('change', fetchPeriods); classSelect.addEventListener('change', fetchPeriods); fetchPeriods(); }
 
-// Lọc bảng GV
+const roleSelect = document.getElementById('roleSelect');
+if (roleSelect) roleSelect.addEventListener('change', function() {
+  const opt = this.options[this.selectedIndex];
+  document.getElementById('roleClassWrap').style.opacity = opt?.dataset?.needClass === '1' ? '1' : '0.55';
+});
+
+// Lọc bảng
 document.getElementById('boardFilter')?.addEventListener('input', function() {
   const q = this.value.toLowerCase().trim();
   document.querySelectorAll('#boardBody .board-row').forEach(row => {
-    row.style.display = !q || (row.dataset.search || '').includes(q) ? '' : 'none';
+    row.style.display = !q || (row.dataset.search||'').includes(q) ? '' : 'none';
   });
 });
-// Lọc thiếu môn
-document.getElementById('missFilter')?.addEventListener('input', function() {
+document.getElementById('missF')?.addEventListener('input', function() {
   const q = this.value.toLowerCase().trim();
-  document.querySelectorAll('#missTable tbody tr').forEach(tr => {
-    tr.style.display = !q || (tr.dataset.s || '').includes(q) ? '' : 'none';
+  document.querySelectorAll('#missTbl tr').forEach(tr => {
+    tr.style.display = !q || (tr.dataset.s||'').includes(q) ? '' : 'none';
   });
 });
 
-// Transfer list
-const assignData = <?= json_encode(array_map(fn($a)=>['id'=>$a['id'],'teacher'=>$a['teacher'],'label'=>$a['subject'].' · '.$a['class'].' ('.$a['periods'].'t)'], $assignments), JSON_UNESCAPED_UNICODE) ?>;
-document.getElementById('fromT')?.addEventListener('change', function() {
-  const t = this.value;
-  const box = document.getElementById('transferList');
-  const items = assignData.filter(a => a.teacher === t);
-  if (!items.length) { box.innerHTML = '<span class="text-muted">Chưa có phân công dạy.</span>'; return; }
-  box.innerHTML = items.map(a => `<div class="form-check"><input class="form-check-input" type="checkbox" name="ids[]" value="${a.id}" id="i${a.id}" form="formTransfer"><label class="form-check-label" for="i${a.id}">${a.label}</label></div>`).join('');
+// Kéo thả
+let dragId = null;
+function onDragChip(e) {
+  dragId = e.currentTarget.dataset.id;
+  e.dataTransfer.setData('text/plain', dragId);
+  e.dataTransfer.effectAllowed = 'move';
+}
+function onDropChip(e, el) {
+  e.preventDefault();
+  el.classList.remove('drag-over');
+  const id = e.dataTransfer.getData('text/plain') || dragId;
+  const to = el.dataset.teacher;
+  if (!id || !to) return;
+  const fromChip = document.querySelector('.chip[data-id="'+id+'"]');
+  if (fromChip && fromChip.dataset.teacher === to) return;
+  if (!confirm('Chuyển phân công sang « ' + to + ' »?\n(Nếu trùng môn+lớp với người khác sẽ thay thế.)')) return;
+  document.getElementById('moveId').value = id;
+  document.getElementById('moveTo').value = to;
+  document.getElementById('formMove').submit();
+}
+
+// Bấm chip → modal sửa
+function openChipModal(el) {
+  document.getElementById('chipId').value = el.dataset.id;
+  document.getElementById('chipDeleteId').value = el.dataset.id;
+  document.getElementById('chipTeacher').value = el.dataset.teacher;
+  document.getElementById('chipSubject').value = el.dataset.subject;
+  document.getElementById('chipClass').value = el.dataset.class;
+  document.getElementById('chipPeriods').value = el.dataset.periods;
+  document.getElementById('chipNote').value = el.dataset.note || '';
+  new bootstrap.Modal(document.getElementById('modalChip')).show();
+}
+document.getElementById('btnChipDelete')?.addEventListener('click', function() {
+  if (confirm('Xóa phân công này?')) document.getElementById('formChipDelete').submit();
 });
 
-// Hash → tab
-function showHashTab() {
-  const h = (location.hash || '#them').replace('#','');
-  const map = {them:'#them', bang:'#bang', doicheo:'#doicheo', rasoat:'#rasoat', kiemnhiem:'#them'};
-  const sel = map[h] || '#them';
-  const tab = document.querySelector('#wsTabs a[href="'+sel+'"]');
-  if (tab) new bootstrap.Tab(tab).show();
-  if (h === 'kiemnhiem') {
-    const t2 = document.querySelector('a[href="#kiemnhiem"]');
-    if (t2) new bootstrap.Tab(t2).show();
-  }
-}
-showHashTab();
-window.addEventListener('hashchange', showHashTab);
-document.querySelectorAll('#wsTabs a').forEach(a => a.addEventListener('shown.bs.tab', e => {
-  history.replaceState(null,'', e.target.getAttribute('href'));
-}));
+// Popup thay thế
+<?php if ($ask_replace): ?>
+(function(){
+  document.getElementById('rpSubject').textContent = <?= json_encode($_GET['subject'] ?? '') ?>;
+  document.getElementById('rpClass').textContent = <?= json_encode($_GET['class'] ?? '') ?>;
+  document.getElementById('rpConflict').textContent = <?= json_encode($_GET['conflict'] ?? '') ?>;
+  document.getElementById('rpNew').textContent = <?= json_encode($_GET['teacher'] ?? '') ?>;
+  document.getElementById('btnDoReplace').onclick = function() {
+    document.getElementById('replaceOne').value = '1';
+    document.getElementById('formAddOne').submit();
+  };
+  new bootstrap.Modal(document.getElementById('modalReplace')).show();
+})();
+<?php endif; ?>
+
+<?php if ($ask_replace_role): ?>
+(function(){
+  document.getElementById('rpSubject').textContent = <?= json_encode($_GET['role'] ?? '') ?>;
+  document.getElementById('rpClass').textContent = <?= json_encode($_GET['class'] ?? '') ?>;
+  document.getElementById('rpConflict').textContent = <?= json_encode($_GET['conflict'] ?? '') ?>;
+  document.getElementById('rpNew').textContent = <?= json_encode($_GET['teacher'] ?? '') ?>;
+  document.getElementById('btnDoReplace').onclick = function() {
+    document.getElementById('replaceRole').value = '1';
+    document.getElementById('formAddRole').submit();
+  };
+  new bootstrap.Modal(document.getElementById('modalReplace')).show();
+})();
+<?php endif; ?>
+
+// Sau khi thêm thành công → cuộn xuống bảng
+<?php if (!empty($_GET['ok'])): ?>
+document.getElementById('board')?.scrollIntoView({behavior:'smooth', block:'start'});
+<?php endif; ?>
 </script>
 <?php require_once 'includes/footer.php'; ?>
