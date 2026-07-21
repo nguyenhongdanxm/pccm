@@ -28,6 +28,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'thpt' => !empty($_POST['thpt']),
                 'tap_su' => !empty($_POST['tap_su']),
             ]);
+            $cm = $_POST['chuyen_mon'] ?? [];
+            if (!is_array($cm)) $cm = $cm ? [$cm] : [];
+            set_teacher_chuyen_mon($name, $cm);
             flash("Đã thêm: $name", 'success');
         } else {
             flash($name ? 'Giáo viên đã tồn tại.' : 'Nhập họ tên.', 'warning');
@@ -77,28 +80,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    if ($action === 'set_chuyen_mon') {
+        $name = trim($_POST['name'] ?? '');
+        if ($name) {
+            $cm = $_POST['chuyen_mon'] ?? [];
+            if (!is_array($cm)) $cm = $cm ? [$cm] : [];
+            set_teacher_chuyen_mon($name, $cm);
+            flash("Đã cập nhật chuyên môn: $name", 'success');
+        }
+    }
+
     $q = array_filter([
         'f_khxh' => $_POST['keep_f_khxh'] ?? '',
         'f_khtn' => $_POST['keep_f_khtn'] ?? '',
         'f_thcs' => $_POST['keep_f_thcs'] ?? '',
         'f_thpt' => $_POST['keep_f_thpt'] ?? '',
         'f_tap_su' => $_POST['keep_f_tap_su'] ?? '',
+        'f_cm' => $_POST['keep_f_cm'] ?? '',
         'q' => $_POST['keep_q'] ?? '',
-    ]);
+    ], fn($v) => $v !== '' && $v !== null);
     header('Location: ' . BASE_URL . 'giaovien.php' . ($q ? '?' . http_build_query($q) : ''));
     exit;
 }
 
 require_once 'includes/header.php';
 $teachers = get_teachers_sorted();
+$subject_names = array_keys(get_subjects());
+sort($subject_names);
+
 $q_search = trim($_GET['q'] ?? '');
 $f_khxh = !empty($_GET['f_khxh']);
 $f_khtn = !empty($_GET['f_khtn']);
 $f_thcs = !empty($_GET['f_thcs']);
 $f_thpt = !empty($_GET['f_thpt']);
 $f_tap_su = !empty($_GET['f_tap_su']);
+$f_cm = trim($_GET['f_cm'] ?? '');
 
-$filtered = array_values(array_filter($teachers, function($t) use ($q_search, $f_khxh, $f_khtn, $f_thcs, $f_thpt, $f_tap_su) {
+$filtered = array_values(array_filter($teachers, function($t) use ($q_search, $f_khxh, $f_khtn, $f_thcs, $f_thpt, $f_tap_su, $f_cm) {
     if ($q_search && mb_stripos($t, $q_search) === false) return false;
     $f = get_teacher_flags($t);
     if ($f_khxh && !$f['khxh']) return false;
@@ -106,6 +124,10 @@ $filtered = array_values(array_filter($teachers, function($t) use ($q_search, $f
     if ($f_thcs && !$f['thcs']) return false;
     if ($f_thpt && !$f['thpt']) return false;
     if ($f_tap_su && !$f['tap_su']) return false;
+    if ($f_cm !== '') {
+        $cm = $f['chuyen_mon'] ?? [];
+        if (!in_array($f_cm, $cm, true)) return false;
+    }
     return true;
 }));
 
@@ -155,6 +177,15 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 <form method="post">
 <input type="hidden" name="action" value="add">
 <div class="mb-2"><input type="text" name="name" class="form-control form-control-sm" placeholder="Họ tên" required></div>
+<div class="mb-2">
+<label class="form-label small mb-0 fw-semibold">Chuyên môn</label>
+<select name="chuyen_mon[]" class="form-select form-select-sm" multiple size="5">
+<?php foreach ($subject_names as $s): ?>
+<option value="<?= e($s) ?>"><?= e($s) ?></option>
+<?php endforeach; ?>
+</select>
+<div class="form-text">Giữ Ctrl để chọn nhiều môn</div>
+</div>
 <div class="form-check"><input class="form-check-input" type="checkbox" name="khxh" id="a_khxh" value="1"><label class="form-check-label" for="a_khxh">Tổ KHXH</label></div>
 <div class="form-check"><input class="form-check-input" type="checkbox" name="khtn" id="a_khtn" value="1"><label class="form-check-label" for="a_khtn">Tổ KHTN</label></div>
 <div class="form-check"><input class="form-check-input" type="checkbox" name="thcs" id="a_thcs" value="1" checked><label class="form-check-label" for="a_thcs">THCS</label></div>
@@ -169,8 +200,16 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 <div class="card">
 <div class="card-header">
 <form method="get" class="row g-2 align-items-end">
-<div class="col-md-4">
+<div class="col-md-3">
 <input type="text" name="q" class="form-control form-control-sm" placeholder="Tìm tên..." value="<?= e($q_search) ?>">
+</div>
+<div class="col-md-3">
+<select name="f_cm" class="form-select form-select-sm">
+<option value="">Mọi chuyên môn</option>
+<?php foreach ($subject_names as $s): ?>
+<option value="<?= e($s) ?>" <?= $f_cm===$s?'selected':'' ?>><?= e($s) ?></option>
+<?php endforeach; ?>
+</select>
 </div>
 <div class="col-auto">
 <div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" name="f_khxh" value="1" id="fk" <?= $f_khxh?'checked':'' ?>><label class="form-check-label small" for="fk">KHXH</label></div>
@@ -192,8 +231,9 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 <tr>
 <th class="text-start">#</th>
 <th class="text-start">Họ tên</th>
-<th title="Tổ Khoa học xã hội">Tổ KHXH</th>
-<th title="Tổ Khoa học tự nhiên">Tổ KHTN</th>
+<th class="text-start" style="min-width:160px">Chuyên môn</th>
+<th title="Tổ Khoa học xã hội">KHXH</th>
+<th title="Tổ Khoa học tự nhiên">KHTN</th>
 <th>THCS</th>
 <th>THPT</th>
 <th>Tập sự</th>
@@ -204,6 +244,7 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 <tbody>
 <?php foreach ($filtered as $i => $t):
     $f = get_teacher_flags($t);
+    $cm = $f['chuyen_mon'] ?? [];
     $quota = get_quota($t);
 ?>
 <tr>
@@ -219,11 +260,36 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 </form>
 </div>
 </td>
+<td class="text-start p-1">
+<form method="post" id="cm<?= $i ?>">
+<input type="hidden" name="action" value="set_chuyen_mon">
+<input type="hidden" name="name" value="<?= e($t) ?>">
+<input type="hidden" name="keep_q" value="<?= e($q_search) ?>">
+<input type="hidden" name="keep_f_cm" value="<?= e($f_cm) ?>">
+<?php if ($f_khxh): ?><input type="hidden" name="keep_f_khxh" value="1"><?php endif; ?>
+<?php if ($f_khtn): ?><input type="hidden" name="keep_f_khtn" value="1"><?php endif; ?>
+<?php if ($f_thcs): ?><input type="hidden" name="keep_f_thcs" value="1"><?php endif; ?>
+<?php if ($f_thpt): ?><input type="hidden" name="keep_f_thpt" value="1"><?php endif; ?>
+<?php if ($f_tap_su): ?><input type="hidden" name="keep_f_tap_su" value="1"><?php endif; ?>
+<select name="chuyen_mon[]" class="form-select form-select-sm" multiple size="3" style="min-width:140px"
+  onchange="document.getElementById('cm<?= $i ?>').submit()" title="Ctrl+click chọn nhiều">
+<?php foreach ($subject_names as $s): ?>
+<option value="<?= e($s) ?>" <?= in_array($s, $cm, true)?'selected':'' ?>><?= e($s) ?></option>
+<?php endforeach; ?>
+</select>
+</form>
+<?php if ($cm): ?>
+<div class="mt-1"><?php foreach ($cm as $s): ?><span class="badge bg-primary me-1 mb-1"><?= e($s) ?></span><?php endforeach; ?></div>
+<?php else: ?>
+<span class="text-muted small">Chưa chọn</span>
+<?php endif; ?>
+</td>
 <td colspan="5" class="p-1">
 <form method="post" id="flag<?= $i ?>" class="d-contents">
 <input type="hidden" name="action" value="set_flags">
 <input type="hidden" name="name" value="<?= e($t) ?>">
 <input type="hidden" name="keep_q" value="<?= e($q_search) ?>">
+<input type="hidden" name="keep_f_cm" value="<?= e($f_cm) ?>">
 <?php if ($f_khxh): ?><input type="hidden" name="keep_f_khxh" value="1"><?php endif; ?>
 <?php if ($f_khtn): ?><input type="hidden" name="keep_f_khtn" value="1"><?php endif; ?>
 <?php if ($f_thcs): ?><input type="hidden" name="keep_f_thcs" value="1"><?php endif; ?>
@@ -250,13 +316,13 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 </tr>
 <?php endforeach; ?>
 <?php if (!$filtered): ?>
-<tr><td colspan="9" class="text-muted py-3">Không có giáo viên phù hợp.</td></tr>
+<tr><td colspan="10" class="text-muted py-3">Không có giáo viên phù hợp.</td></tr>
 <?php endif; ?>
 </tbody>
 </table>
 </div>
 <div class="card-footer small text-muted">
-Hiển thị <?= count($filtered) ?>/<?= count($teachers) ?> · Click ô tích để gán nhanh · Định mức theo cấp THCS/THPT đã cấu hình phía trên
+Hiển thị <?= count($filtered) ?>/<?= count($teachers) ?> · Chuyên môn lấy từ danh mục Môn học · Giữ Ctrl để chọn nhiều môn
 </div>
 </div></div>
 </div></div>
