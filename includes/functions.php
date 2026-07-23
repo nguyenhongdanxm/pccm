@@ -332,13 +332,35 @@ function get_export_rows($vid = null) {
 }
 
 function get_grade($class_name) { return preg_replace('/[^0-9]/', '', $class_name); }
+
+/**
+ * Số tiết chuẩn của môn cho 1 lớp.
+ * Ưu tiên khóa đúng tên lớp (10A, 10B…), nếu không có thì dùng khối (10).
+ */
+function resolve_std_period($grades_data, $class_name) {
+    if (!is_array($grades_data)) return null;
+    if (isset($grades_data[$class_name]) && $grades_data[$class_name] !== '' && $grades_data[$class_name] !== null) {
+        $v = floatval($grades_data[$class_name]);
+        return $v; // cho phép 0 nghĩa là không dạy
+    }
+    $grade = get_grade($class_name);
+    if ($grade !== '' && isset($grades_data[$grade]) && $grades_data[$grade] !== '' && $grades_data[$grade] !== null) {
+        return floatval($grades_data[$grade]);
+    }
+    return null;
+}
+
 function get_periods($subject, $class_name) {
     $subjects = get_subjects();
-    return $subjects[$subject][get_grade($class_name)] ?? null;
+    if (!isset($subjects[$subject])) return null;
+    $v = resolve_std_period($subjects[$subject], $class_name);
+    if ($v === null) return null;
+    if ($v <= 0) return null; // 0 = không dạy môn này ở lớp đó
+    return $v;
 }
 
 /**
- * Thống kê phân công so với tiết chuẩn chương trình (theo môn–khối).
+ * Thống kê phân công so với tiết chuẩn (THCS theo khối, THPT theo lớp).
  */
 function get_assignment_stats($vid = null) {
     $vid = $vid ?: get_active_version_id();
@@ -347,7 +369,6 @@ function get_assignment_stats($vid = null) {
     $assignments = get_assignments($vid);
     $role_items = get_role_assignments($vid);
 
-    // Map: subject|class => periods, teachers
     $map = [];
     $by_class_assigned = [];
     $by_subject_assigned = [];
@@ -380,7 +401,6 @@ function get_assignment_stats($vid = null) {
     $total_std = 0;
     $classes_ok = 0;
 
-    // Conflicts: more than 1 unique teacher for same subject+class
     foreach ($map as $key => $info) {
         $teachers = array_values(array_unique($info['teachers']));
         if (count($teachers) > 1) {
@@ -396,12 +416,10 @@ function get_assignment_stats($vid = null) {
         $assigned = floatval($by_class_assigned[$cls] ?? 0);
         $miss = [];
         $pdiffs = [];
-        $class_ok = true;
 
         foreach ($subjects as $sub => $grades) {
-            if (!is_array($grades) || !isset($grades[$grade])) continue;
-            $sp = floatval($grades[$grade]);
-            if ($sp <= 0) continue;
+            $sp = resolve_std_period($grades, $cls);
+            if ($sp === null || $sp <= 0) continue;
 
             $std += $sp;
             if (!isset($by_subject[$sub])) {
@@ -414,13 +432,11 @@ function get_assignment_stats($vid = null) {
 
             if ($ap <= 0.0001) {
                 $slots_missing++;
-                $class_ok = false;
                 $miss[] = $sub . ' (' . rtrim(rtrim(number_format($sp, 2, '.', ''), '0'), '.') . 't)';
                 $missing_list[] = ['class' => $cls, 'subject' => $sub, 'std' => $sp];
                 $by_subject[$sub]['missing']++;
             } elseif (abs($ap - $sp) > 0.05) {
                 $slots_diff++;
-                $class_ok = false;
                 $pdiffs[] = $sub . ': ' . $ap . '/' . $sp;
                 $diff_list[] = [
                     'class' => $cls,
@@ -469,11 +485,9 @@ function get_assignment_stats($vid = null) {
         $by_grade[$grade]['std'] += $std;
         $by_grade[$grade]['assigned'] += $assigned;
         if ($status === 'ok') $by_grade[$grade]['classes_ok']++;
-        // std per class = curriculum for one class of this grade
-        $by_grade[$grade]['std_per_class'] = $std; // last class same grade should match
+        $by_grade[$grade]['std_per_class'] = $std;
     }
 
-    // Fill subject assigned totals
     foreach ($by_subject as $sub => &$row) {
         $row['assigned'] = floatval($by_subject_assigned[$sub] ?? 0);
         $row['diff'] = $row['assigned'] - $row['std'];
