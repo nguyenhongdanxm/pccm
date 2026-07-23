@@ -4,6 +4,9 @@ require_once __DIR__ . '/config.php';
 define('ADMIN_USER', 'admin');
 define('ADMIN_PASS', 'Xinman@2021');
 
+/** Giáo viên tập sự được giảm bao nhiêu tiết so với định mức */
+if (!defined('TAP_SU_QUOTA_REDUCTION')) define('TAP_SU_QUOTA_REDUCTION', 2);
+
 function load_json($file, $default = []) {
     if (file_exists($file)) {
         $data = json_decode(file_get_contents($file), true);
@@ -70,6 +73,7 @@ function init_data() {
         save_json(SETTINGS_FILE, [
             'quota_thcs' => DEFAULT_QUOTA_THCS,
             'quota_thpt' => DEFAULT_QUOTA_THPT,
+            'tap_su_reduction' => TAP_SU_QUOTA_REDUCTION,
         ]);
     }
     migrate_legacy_if_needed();
@@ -79,6 +83,7 @@ function get_settings() {
     return load_json(SETTINGS_FILE, [
         'quota_thcs' => DEFAULT_QUOTA_THCS,
         'quota_thpt' => DEFAULT_QUOTA_THPT,
+        'tap_su_reduction' => TAP_SU_QUOTA_REDUCTION,
     ]);
 }
 function save_settings($s) { save_json(SETTINGS_FILE, $s); }
@@ -89,6 +94,11 @@ function get_quota_thcs() {
 function get_quota_thpt() {
     $s = get_settings();
     return floatval($s['quota_thpt'] ?? DEFAULT_QUOTA_THPT);
+}
+function get_tap_su_reduction() {
+    $s = get_settings();
+    $r = $s['tap_su_reduction'] ?? TAP_SU_QUOTA_REDUCTION;
+    return is_numeric($r) ? floatval($r) : TAP_SU_QUOTA_REDUCTION;
 }
 
 function get_teachers() { global $DEFAULT_TEACHERS; return load_json(TEACHERS_FILE, $DEFAULT_TEACHERS); }
@@ -117,7 +127,6 @@ function get_teacher_flags($name) {
         if (strpos($g, 'KHXH') !== false) $khxh = true;
         if (strpos($g, 'KHTN') !== false) $khtn = true;
     }
-    // Chuyên môn: mảng tên môn
     $cm = $m['chuyen_mon'] ?? [];
     if (is_string($cm) && $cm !== '') $cm = [$cm];
     if (!is_array($cm)) $cm = [];
@@ -184,10 +193,23 @@ function set_teacher_level($name, $level) {
 function set_teacher_group($name, $group) {
     set_teacher_meta_field($name, 'group', $group);
 }
+
+/**
+ * Định mức tiết/tuần của giáo viên.
+ * - Theo cấp THCS / THPT
+ * - Nếu tích Tập sự → giảm thêm get_tap_su_reduction() tiết (mặc định 2)
+ */
 function get_quota($name) {
     $f = get_teacher_flags($name);
-    if ($f['thpt'] && !$f['thcs']) return get_quota_thpt();
-    return get_quota_thcs();
+    if ($f['thpt'] && !$f['thcs']) {
+        $q = get_quota_thpt();
+    } else {
+        $q = get_quota_thcs();
+    }
+    if (!empty($f['tap_su'])) {
+        $q = max(0, $q - get_tap_su_reduction());
+    }
+    return $q;
 }
 
 function get_assignments($vid = null) {
