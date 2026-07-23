@@ -112,7 +112,7 @@ if (is_logged_in()) {
     exit;
 }
 
-// ===== KHÁCH (chưa đăng nhập) – giao diện sạch, chuyên nghiệp =====
+// ===== KHÁCH (chưa đăng nhập) =====
 require_once 'includes/header.php';
 ?>
 <style>
@@ -131,7 +131,6 @@ require_once 'includes/header.php';
   font-weight:500;
   margin:0 0 2rem;
   line-height:1.5;
-  /* không nền, không bo góc, không viền */
   background:none;
   border:none;
   padding:0;
@@ -168,8 +167,8 @@ require_once 'includes/header.php';
   <p class="home-author"><i class="bi bi-person-badge"></i>Thiết kế bởi thầy giáo Nguyễn Hồng Dân</p>
 
   <div class="home-actions">
-    <a href="<?= BASE_URL ?>ketqua.php" class="btn btn-success">
-      <i class="bi bi-clipboard-data"></i> Xem phân công
+    <a href="<?= BASE_URL ?>tracuu.php" class="btn btn-success">
+      <i class="bi bi-search"></i> Xem phân công
     </a>
     <a href="<?= BASE_URL ?>login.php" class="btn btn-primary">
       <i class="bi bi-box-arrow-in-right"></i> Đăng nhập quản trị
