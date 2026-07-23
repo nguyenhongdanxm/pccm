@@ -31,7 +31,6 @@ function period_val($data, $key) {
     if (isset($data[$key]) && $data[$key] !== '' && $data[$key] !== null) {
         return $data[$key];
     }
-    // fallback khối cho lớp (10A ← 10) — dữ liệu cũ
     $g = preg_replace('/[^0-9]/', '', $key);
     if ($g !== '' && isset($data[$g]) && $data[$g] !== '' && $data[$g] !== null) {
         return $data[$g];
@@ -44,9 +43,111 @@ function is_key_active($data, $key) {
     return $v !== '' && is_numeric($v) && floatval($v) > 0;
 }
 
+/**
+ * Đồng bộ: Phân công → Môn học
+ * Gom số tiết theo môn + lớp/khối từ bảng phân công hiện tại.
+ */
+function sync_assignments_to_subjects() {
+    $assignments = get_assignments();
+    $subjects = get_subjects();
+    $added_subjects = 0;
+    $updated_keys = 0;
+
+    // subject|key => total periods
+    $map = [];
+    foreach ($assignments as $a) {
+        $sub = trim($a['subject'] ?? '');
+        $cls = trim($a['class'] ?? '');
+        $p = floatval($a['periods'] ?? 0);
+        if ($sub === '' || $cls === '' || $p <= 0) continue;
+
+        $grade = get_grade($cls);
+        $gnum = intval($grade);
+        // THCS: lưu theo khối; THPT: lưu theo lớp
+        $key = ($gnum >= 10) ? $cls : $grade;
+        if ($key === '') continue;
+
+        $mk = $sub . "\0" . $key;
+        $map[$mk] = ($map[$mk] ?? 0) + $p;
+    }
+
+    foreach ($map as $mk => $periods) {
+        [$sub, $key] = explode("\0", $mk, 2);
+        if (!isset($subjects[$sub])) {
+            $subjects[$sub] = [];
+            $added_subjects++;
+        }
+        if (!is_array($subjects[$sub])) $subjects[$sub] = [];
+        $old = $subjects[$sub][$key] ?? null;
+        $subjects[$sub][$key] = $periods;
+        if ($old === null || floatval($old) != floatval($periods)) $updated_keys++;
+    }
+
+    save_json(SUBJECTS_FILE, $subjects);
+    return [
+        'pairs' => count($map),
+        'subjects_new' => $added_subjects,
+        'keys_updated' => $updated_keys,
+    ];
+}
+
+/**
+ * Đồng bộ: Môn học → Phân công
+ * Cập nhật số tiết trên từng dòng phân công theo chuẩn trong danh sách môn.
+ */
+function sync_subjects_to_assignments() {
+    $assignments = get_assignments();
+    $changed = 0;
+    $skipped = 0;
+
+    foreach ($assignments as &$a) {
+        $sub = trim($a['subject'] ?? '');
+        $cls = trim($a['class'] ?? '');
+        if ($sub === '' || $cls === '') { $skipped++; continue; }
+
+        $std = get_periods($sub, $cls);
+        if ($std === null || $std <= 0) { $skipped++; continue; }
+
+        $old = floatval($a['periods'] ?? 0);
+        if (abs($old - $std) > 0.001) {
+            $a['periods'] = $std;
+            $changed++;
+        }
+    }
+    unset($a);
+
+    if ($changed > 0) {
+        save_assignments($assignments);
+    }
+    return ['changed' => $changed, 'skipped' => $skipped, 'total' => count($assignments)];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $subjects = get_subjects();
     $action = $_POST['action'] ?? '';
+    $tab = $_POST['tab'] ?? 'thcs';
+
+    if ($action === 'sync_from_assignments') {
+        $r = sync_assignments_to_subjects();
+        flash(
+            "Đồng bộ Phân công → Môn học: {$r['pairs']} ô tiết · "
+            . "môn mới {$r['subjects_new']} · cập nhật {$r['keys_updated']}.",
+            'success'
+        );
+        header('Location: ' . BASE_URL . 'monhoc.php?tab=' . urlencode($tab));
+        exit;
+    }
+
+    if ($action === 'sync_to_assignments') {
+        $r = sync_subjects_to_assignments();
+        flash(
+            "Đồng bộ Môn học → Phân công: đã cập nhật {$r['changed']}/{$r['total']} dòng"
+            . ($r['skipped'] ? " (bỏ qua {$r['skipped']} dòng không có chuẩn)" : '') . '.',
+            $r['changed'] > 0 ? 'success' : 'info'
+        );
+        header('Location: ' . BASE_URL . 'monhoc.php?tab=' . urlencode($tab));
+        exit;
+    }
 
     if ($action === 'update') {
         $subject = $_POST['subject'] ?? '';
@@ -55,7 +156,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $existing = $subjects[$subject];
             if (!is_array($existing)) $existing = [];
 
-            // Giữ phần không thuộc level đang sửa
             $keep = [];
             foreach ($existing as $k => $v) {
                 $g = intval(preg_replace('/[^0-9]/', '', (string)$k));
@@ -67,7 +167,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $new = $keep;
             $checked = $_POST['on'] ?? [];
             if (!is_array($checked)) $checked = [];
-
             $keys = ($level === 'thcs') ? keys_thcs() : keys_thpt();
 
             foreach ($keys as $ik) {
@@ -84,11 +183,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            // Khi lưu THPT theo lớp: bỏ khóa khối cũ 10/11/12 nếu đã có dữ liệu lớp
             if ($level === 'thpt') {
-                foreach (['10', '11', '12'] as $og) {
-                    unset($new[$og]);
-                }
+                foreach (['10', '11', '12'] as $og) unset($new[$og]);
             }
 
             $subjects[$subject] = $new;
@@ -117,7 +213,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    $tab = $_POST['tab'] ?? 'thcs';
     header('Location: ' . BASE_URL . 'monhoc.php?tab=' . urlencode($tab));
     exit;
 }
@@ -127,6 +222,8 @@ $subjects = get_subjects();
 ksort($subjects);
 $tab = $_GET['tab'] ?? 'thcs';
 if (!in_array($tab, ['thcs', 'thpt'], true)) $tab = 'thcs';
+$active_ver = get_version(get_active_version_id());
+$ver_label = $active_ver['name'] ?? 'phiên bản hiện tại';
 
 function render_grade_row($subject, $data, $keys, $level, $tab) {
     $uid = md5($subject . $level);
@@ -197,10 +294,21 @@ function render_grade_row($subject, $data, $keys, $level, $tab) {
   background:#1F4E79!important;color:#fff!important;border-color:#1F4E79!important
 }
 .hint{font-size:.88rem;color:#6c757d}
+.sync-card{
+  border:2px dashed #1F4E79;border-radius:12px;background:#f0f5fa;padding:1rem 1.15rem
+}
+.sync-opt{
+  border:1px solid #dee2e6;border-radius:10px;padding:.85rem 1rem;background:#fff;
+  height:100%;transition:border-color .15s,box-shadow .15s
+}
+.sync-opt:hover{border-color:#1F4E79;box-shadow:0 4px 14px rgba(31,78,121,.12)}
 </style>
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
   <h3 class="mb-0"><i class="bi bi-book"></i> Môn học & Số tiết</h3>
+  <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#syncModal">
+    <i class="bi bi-arrow-left-right"></i> Đồng bộ 2 chiều
+  </button>
 </div>
 
 <ul class="nav nav-level mb-3">
@@ -226,9 +334,9 @@ function render_grade_row($subject, $data, $keys, $level, $tab) {
   <?php endif; ?>
 </div>
 
-<div class="row mb-3">
+<div class="row mb-3 g-3">
   <div class="col-md-4">
-    <div class="card">
+    <div class="card h-100">
       <div class="card-header py-2">Thêm môn mới</div>
       <div class="card-body py-2">
         <form method="post" class="d-flex gap-2">
@@ -237,6 +345,72 @@ function render_grade_row($subject, $data, $keys, $level, $tab) {
           <input type="text" name="name" class="form-control form-control-sm" placeholder="Tên môn" required>
           <button class="btn btn-primary btn-sm text-nowrap">Thêm</button>
         </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="sync-card h-100 d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <div>
+        <div class="fw-bold text-primary"><i class="bi bi-arrow-left-right"></i> Đồng bộ 2 chiều</div>
+        <div class="small text-muted">Phiên bản: <strong><?= e($ver_label) ?></strong> · Phân công ↔ Môn học & số tiết</div>
+      </div>
+      <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#syncModal">
+        Chọn hướng đồng bộ…
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal đồng bộ -->
+<div class="modal fade" id="syncModal" tabindex="-1" aria-labelledby="syncModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="syncModalLabel"><i class="bi bi-arrow-left-right"></i> Đồng bộ 2 chiều</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">
+          Phiên bản phân công đang dùng: <strong><?= e($ver_label) ?></strong>.
+          Chọn một hướng đồng bộ:
+        </p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="sync-opt">
+              <div class="fw-bold mb-1"><i class="bi bi-box-arrow-in-down text-success"></i> 1. Phân công → Môn học</div>
+              <p class="small text-muted mb-3">
+                Lấy số tiết đã phân công theo <em>môn + lớp/khối</em>, ghi vào danh sách môn học.
+                THCS gom theo khối · THPT theo từng lớp. Có thể tạo môn mới nếu chưa có.
+              </p>
+              <form method="post" onsubmit="return confirm('Ghi số tiết từ PHÂN CÔNG sang danh sách MÔN HỌC?\nDữ liệu môn hiện có sẽ được cập nhật theo phân công.')">
+                <input type="hidden" name="action" value="sync_from_assignments">
+                <input type="hidden" name="tab" value="<?= e($tab) ?>">
+                <button type="submit" class="btn btn-success w-100">
+                  <i class="bi bi-download"></i> Đồng bộ từ Phân công
+                </button>
+              </form>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="sync-opt">
+              <div class="fw-bold mb-1"><i class="bi bi-box-arrow-up text-primary"></i> 2. Môn học → Phân công</div>
+              <p class="small text-muted mb-3">
+                Cập nhật <em>số tiết</em> trên các dòng phân công đã có cho khớp với chuẩn trong danh sách môn.
+                Không tạo phân công mới; bỏ qua dòng chưa có số tiết chuẩn.
+              </p>
+              <form method="post" onsubmit="return confirm('Ghi số tiết từ danh sách MÔN HỌC sang PHÂN CÔNG?\nCác dòng phân công sẽ đổi số tiết theo chuẩn môn.')">
+                <input type="hidden" name="action" value="sync_to_assignments">
+                <input type="hidden" name="tab" value="<?= e($tab) ?>">
+                <button type="submit" class="btn btn-primary w-100">
+                  <i class="bi bi-upload"></i> Đồng bộ ra Phân công
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Đóng</button>
       </div>
     </div>
   </div>
@@ -288,7 +462,7 @@ foreach ($subjects as $subject => $data):
 <?php endif; ?>
 
 <?php if (!$subjects): ?>
-<div class="alert alert-warning">Chưa có môn học. Hãy thêm môn mới.</div>
+<div class="alert alert-warning">Chưa có môn học. Hãy thêm môn mới hoặc đồng bộ từ phân công.</div>
 <?php endif; ?>
 
 <script>
