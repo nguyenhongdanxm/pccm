@@ -4,14 +4,14 @@ require_once 'includes/functions.php';
 require_login();
 
 function go_board($extra = '') {
-    header('Location: ' . BASE_URL . 'them.php?ok=1' . $extra . '#board');
+    // Không ép #board — JS sẽ khôi phục vị trí cuộn + bộ lọc
+    header('Location: ' . BASE_URL . 'them.php?ok=1' . $extra);
     exit;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
 
-    // Xóa
     if ($action === 'delete_day') {
         $id = $_POST['id'] ?? '';
         save_assignments(array_values(array_filter(get_assignments(), fn($a) => $a['id'] !== $id)));
@@ -25,7 +25,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         go_board();
     }
 
-    // Thêm dạy môn (có thay thế nếu trùng)
     if ($action === 'add_one') {
         $assignments = get_assignments();
         $teacher = trim($_POST['teacher'] ?? '');
@@ -42,12 +41,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         $same_self = false;
         $conflict_teacher = null;
-        $conflict_id = null;
         foreach ($assignments as $a) {
             if ($a['subject'] === $subject && $a['class'] === $class_name) {
                 if ($a['teacher'] === $teacher) { $same_self = true; break; }
                 $conflict_teacher = $a['teacher'];
-                $conflict_id = $a['id'];
             }
         }
 
@@ -57,21 +54,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         if ($conflict_teacher && !$replace) {
-            // Quay lại form kèm tham số để hiện popup thay thế
             $q = http_build_query([
-                'ask_replace' => 1,
-                'teacher' => $teacher,
-                'subject' => $subject,
-                'class' => $class_name,
-                'note' => $note,
-                'periods_manual' => $periods_manual,
+                'ask_replace' => 1, 'teacher' => $teacher, 'subject' => $subject,
+                'class' => $class_name, 'note' => $note, 'periods_manual' => $periods_manual,
                 'conflict' => $conflict_teacher,
             ]);
-            header('Location: ' . BASE_URL . 'them.php?' . $q);
-            exit;
+            header('Location: ' . BASE_URL . 'them.php?' . $q); exit;
         }
 
-        // Thay thế: xóa phân công cũ cùng môn+lớp
         if ($conflict_teacher && $replace) {
             $assignments = array_values(array_filter($assignments, function($a) use ($subject, $class_name) {
                 return !($a['subject'] === $subject && $a['class'] === $class_name);
@@ -83,12 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         $assignments[] = [
             'id' => date('YmdHis') . substr(microtime(), 2, 6),
-            'teacher' => $teacher,
-            'subject' => $subject,
-            'class' => $class_name,
-            'periods' => $periods,
-            'note' => $note,
-            'created_at' => date('c'),
+            'teacher' => $teacher, 'subject' => $subject, 'class' => $class_name,
+            'periods' => $periods, 'note' => $note, 'created_at' => date('c'),
         ];
         save_assignments($assignments);
         $msg = "Đã giao: $teacher dạy $subject lớp $class_name ($periods tiết)";
@@ -97,7 +83,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         go_board();
     }
 
-    // Thêm nhiều lớp
     if ($action === 'add_multi') {
         $assignments = get_assignments();
         $teacher = trim($_POST['teacher'] ?? '');
@@ -137,7 +122,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         go_board();
     }
 
-    // Thêm kiêm nhiệm
     if ($action === 'add_role') {
         $items = get_role_assignments();
         $roles = get_roles();
@@ -197,7 +181,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         go_board();
     }
 
-    // Cập nhật phân công dạy (đổi môn/lớp/tiết/GV)
     if ($action === 'update_day') {
         $id = $_POST['id'] ?? '';
         $list = get_assignments();
@@ -214,8 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 if ($p !== null) $a['periods'] = $p;
             }
             $a['note'] = trim($_POST['note'] ?? '');
-            $found = true;
-            break;
+            $found = true; break;
         }
         unset($a);
         if ($found) { save_assignments($list); flash('Đã cập nhật phân công.', 'success'); }
@@ -223,7 +205,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         go_board();
     }
 
-    // Kéo-thả / chuyển 1 mục sang GV khác
     if ($action === 'move_day') {
         $id = $_POST['id'] ?? '';
         $to = trim($_POST['to_teacher'] ?? '');
@@ -232,34 +213,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $moved = null;
             foreach ($list as &$a) {
                 if ($a['id'] === $id) {
-                    // Nếu GV đích đã có cùng môn+lớp thì không chuyển
                     foreach ($list as $b) {
                         if ($b['id'] !== $id && $b['teacher'] === $to && $b['subject'] === $a['subject'] && $b['class'] === $a['class']) {
                             flash("Không chuyển: $to đã có {$a['subject']} {$a['class']}.", 'warning');
                             go_board();
                         }
                     }
-                    // Xóa trùng môn+lớp của người khác nếu tick replace (kéo thả mặc định thay thế)
-                    $subj = $a['subject']; $cls = $a['class'];
                     $from = $a['teacher'];
                     $a['teacher'] = $to;
-                    $moved = "$from → $to: $subj $cls";
+                    $moved = "$from → $to: {$a['subject']} {$a['class']}";
                     break;
                 }
             }
             unset($a);
-            // Sau khi đổi GV, gỡ các bản ghi trùng môn+lớp còn lại (không cho trùng)
             if ($moved) {
-                $keep = [];
-                $seen = [];
-                // Ưu tiên giữ bản vừa chuyển (id)
+                $keep = []; $seen = [];
                 foreach ($list as $a) {
                     if ($a['id'] === $id) { $keep[] = $a; $seen[$a['subject'].'|'.$a['class']] = true; }
                 }
                 foreach ($list as $a) {
                     if ($a['id'] === $id) continue;
                     $k = $a['subject'].'|'.$a['class'];
-                    if (isset($seen[$k])) continue; // đã có người (bản vừa chuyển)
+                    if (isset($seen[$k])) continue;
                     $seen[$k] = true;
                     $keep[] = $a;
                 }
@@ -270,7 +245,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         go_board();
     }
 
-    // Đổi chéo 2 GV toàn bộ
     if ($action === 'swap_all') {
         $t1 = trim($_POST['teacher1'] ?? ''); $t2 = trim($_POST['teacher2'] ?? '');
         if (!$t1 || !$t2 || $t1 === $t2) flash('Chọn 2 GV khác nhau.', 'danger');
@@ -306,13 +280,12 @@ $role_by_t = [];
 foreach ($role_items as $a) $role_by_t[$a['teacher']][] = $a;
 $board_names = sort_teachers_by_ten(array_unique(array_merge($teachers, array_keys($day_by_t), array_keys($role_by_t))));
 
-// Rà soát
 $slot = [];
 foreach ($assignments as $a) $slot[$a['subject'].'|'.$a['class']][] = $a['teacher'];
 $conflicts = [];
 foreach ($slot as $k => $list) {
     $u = array_values(array_unique($list));
-    if (count($u) > 1) { [$s,$c] = explode('|',$k,2); $conflicts[] = compact('s') + ['subject'=>$s,'class'=>$c,'teachers'=>$u]; }
+    if (count($u) > 1) { [$s,$c] = explode('|',$k,2); $conflicts[] = ['subject'=>$s,'class'=>$c,'teachers'=>$u]; }
 }
 $missing = [];
 foreach ($classes as $cls) {
@@ -331,21 +304,20 @@ foreach ($teachers as $t) {
     if ($diff < -0.05) $under[] = $item; elseif ($diff > 0.05) $over[] = $item;
 }
 $n_conflict = count($conflicts);
-
-// Popup thay thế?
 $ask_replace = !empty($_GET['ask_replace']);
 $ask_replace_role = !empty($_GET['ask_replace_role']);
 ?>
 
 <style>
-.ws-sticky-tools{position:sticky;top:0;z-index:50;background:#f0f4f8;padding:.5rem 0;margin-bottom:.5rem}
 .board-drop{min-height:36px;border-radius:8px;transition:background .15s}
 .board-drop.drag-over{background:#d4edda;outline:2px dashed #198754}
 .chip[draggable=true]{cursor:grab}
 .chip[draggable=true]:active{cursor:grabbing;opacity:.75}
 .chip-clickable{cursor:pointer}
 .chip-clickable:hover{box-shadow:0 0 0 2px var(--primary)}
-.board-scroll{max-height:calc(100vh - 380px);min-height:280px;overflow:auto}
+.board-scroll{max-height:calc(100vh - 420px);min-height:280px;overflow:auto}
+.filter-bar{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center}
+.filter-bar .form-select,.filter-bar .form-control{width:auto;min-width:110px}
 @media (max-width:768px){.board-scroll{max-height:none}}
 </style>
 
@@ -368,7 +340,6 @@ $ask_replace_role = !empty($_GET['ask_replace_role']);
 <div class="danger-box py-2"><i class="bi bi-exclamation-octagon-fill"></i> Có <strong><?= $n_conflict ?></strong> trùng môn+lớp. <a href="#" data-bs-toggle="modal" data-bs-target="#modalAudit">Xem rà soát</a></div>
 <?php endif; ?>
 
-<!-- ===== FORM THÊM (cố định trên) ===== -->
 <div class="card mb-3">
 <div class="card-header d-flex justify-content-between align-items-center">
 <span><i class="bi bi-plus-circle"></i> Thêm phân công</span>
@@ -446,24 +417,59 @@ $ask_replace_role = !empty($_GET['ask_replace_role']);
 
 </div></div></div>
 
-<!-- ===== BẢNG (cố định dưới) ===== -->
 <div class="card" id="board">
-<div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-<span><i class="bi bi-table"></i> Bảng phân công — kéo thả chip sang GV khác · bấm chip để sửa</span>
-<input type="search" id="boardFilter" class="form-control form-control-sm" style="max-width:200px" placeholder="Lọc GV / môn / lớp">
+<div class="card-header">
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+<span><i class="bi bi-table"></i> Bảng phân công — kéo thả · bấm chip để sửa</span>
+<button type="button" class="btn btn-sm btn-outline-light" id="fClear">Xóa lọc</button>
+</div>
+<div class="filter-bar">
+<input type="search" id="boardFilter" class="form-control form-control-sm" placeholder="Tên / môn / lớp..." style="min-width:160px">
+<select id="fLevel" class="form-select form-select-sm" title="Cấp">
+<option value="">Mọi cấp</option>
+<option value="THCS">THCS</option>
+<option value="THPT">THPT</option>
+</select>
+<select id="fGroup" class="form-select form-select-sm" title="Tổ">
+<option value="">Mọi tổ</option>
+<option value="khxh">Tổ KHXH</option>
+<option value="khtn">Tổ KHTN</option>
+</select>
+<select id="fLoad" class="form-select form-select-sm" title="Tải tiết">
+<option value="">Mọi tải</option>
+<option value="under">Thiếu tiết</option>
+<option value="ok">Đủ định mức</option>
+<option value="over">Thừa tiết</option>
+</select>
+<span class="small text-white-50" id="fCount"></span>
+</div>
 </div>
 <div class="card-body board-scroll" id="boardBody">
 <?php foreach ($board_names as $t):
     $load = $loads[$t] ?? ['day'=>0,'role'=>0,'total'=>0,'quota'=>get_quota($t),'diff'=>-get_quota($t),'level'=>get_teacher_level($t)];
-    $diffClass = abs($load['diff']) < 0.01 ? 'diff-ok' : ($load['diff'] > 0 ? 'diff-over' : 'diff-under');
-    $search = mb_strtolower($t, 'UTF-8');
-    foreach ($day_by_t[$t] ?? [] as $a) $search .= ' ' . mb_strtolower($a['subject'].' '.$a['class'], 'UTF-8');
+    $flags = get_teacher_flags($t);
+    $cm_list = get_teacher_chuyen_mon($t);
+    $diffClass = abs($load['diff']) < 0.05 ? 'diff-ok' : ($load['diff'] > 0 ? 'diff-over' : 'diff-under');
+    $loadStatus = abs($load['diff']) < 0.05 ? 'ok' : ($load['diff'] > 0 ? 'over' : 'under');
+    $search = mb_strtolower($t . ' ' . implode(' ', $cm_list), 'UTF-8');
+    foreach ($day_by_t[$t] ?? [] as $a) $search .= ' ' . mb_strtolower(($a['subject']??'').' '.($a['class']??''), 'UTF-8');
+    foreach ($role_by_t[$t] ?? [] as $a) $search .= ' ' . mb_strtolower(($a['role']??'').' '.($a['class']??''), 'UTF-8');
+    $level = $load['level'] ?? get_teacher_level($t);
 ?>
-<div class="board-row" data-search="<?= e($search) ?>" data-teacher="<?= e($t) ?>">
+<div class="board-row"
+  data-search="<?= e($search) ?>"
+  data-teacher="<?= e($t) ?>"
+  data-level="<?= e($level) ?>"
+  data-khxh="<?= !empty($flags['khxh'])?'1':'0' ?>"
+  data-khtn="<?= !empty($flags['khtn'])?'1':'0' ?>"
+  data-load="<?= e($loadStatus) ?>"
+  data-cm="<?= e(mb_strtolower(implode(' ', $cm_list), 'UTF-8')) ?>">
 <div class="d-flex flex-wrap justify-content-between gap-2 mb-1">
 <strong class="teacher-name"><?= e($t) ?></strong>
 <span class="small">
-<span class="badge bg-secondary"><?= e($load['level']??'THCS') ?></span>
+<span class="badge bg-secondary"><?= e($level) ?></span>
+<?php if (!empty($flags['khxh'])): ?><span class="badge bg-info text-dark">KHXH</span><?php endif; ?>
+<?php if (!empty($flags['khtn'])): ?><span class="badge bg-success">KHTN</span><?php endif; ?>
 Dạy <b><?= number_format($load['day'],2) ?></b> · KN <b><?= number_format($load['role'],2) ?></b> ·
 Tổng <b><?= number_format($load['total'],2) ?></b>/<?= number_format($load['quota'],0) ?>
 <span class="<?= $diffClass ?>"><?= $load['diff']>0?'+':'' ?><?= number_format($load['diff'],2) ?></span>
@@ -486,7 +492,7 @@ Tổng <b><?= number_format($load['total'],2) ?></b>/<?= number_format($load['qu
 <?php if (!empty($role_by_t[$t])): foreach ($role_by_t[$t] as $a): ?>
 <span class="chip chip-role">
 <?= e($a['role']) ?><?= !empty($a['class'])?' '.e($a['class']):'' ?> (<?= e($a['periods']??0) ?>t)
-<form method="post" class="d-inline" onsubmit="return confirm('Xóa kiêm nhiệm?')">
+<form method="post" class="d-inline pccm-keep" onsubmit="return confirm('Xóa kiêm nhiệm?')">
 <input type="hidden" name="action" value="delete_role"><input type="hidden" name="id" value="<?= e($a['id']) ?>">
 <button type="submit" class="chip-x" title="Xóa" onclick="event.stopPropagation()">×</button></form>
 </span>
@@ -495,21 +501,19 @@ Tổng <b><?= number_format($load['total'],2) ?></b>/<?= number_format($load['qu
 </div>
 <?php endforeach; ?>
 </div>
-<div class="card-footer small text-muted">Kéo chip dạy môn sang dòng GV khác để chuyển · Bấm chip để sửa / xóa / đổi</div>
+<div class="card-footer small text-muted">Bộ lọc được giữ đến khi bấm «Xóa lọc» · Vị trí cuộn được giữ sau thêm/xóa</div>
 </div>
 
-<!-- Form ẩn kéo-thả -->
 <form method="post" id="formMove" class="d-none">
 <input type="hidden" name="action" value="move_day">
 <input type="hidden" name="id" id="moveId">
 <input type="hidden" name="to_teacher" id="moveTo">
 </form>
 
-<!-- Modal thao tác chip -->
 <div class="modal fade" id="modalChip" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
 <div class="modal-header"><h5 class="modal-title"><i class="bi bi-pencil-square"></i> Sửa phân công</h5>
 <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-<form method="post">
+<form method="post" class="pccm-keep">
 <input type="hidden" name="action" value="update_day">
 <input type="hidden" name="id" id="chipId">
 <div class="modal-body">
@@ -537,13 +541,12 @@ Tổng <b><?= number_format($load['total'],2) ?></b>/<?= number_format($load['qu
 <button type="submit" class="btn btn-primary btn-sm">Lưu thay đổi</button>
 </div></div>
 </form>
-<form method="post" id="formChipDelete" class="d-none">
+<form method="post" id="formChipDelete" class="d-none pccm-keep">
 <input type="hidden" name="action" value="delete_day">
 <input type="hidden" name="id" id="chipDeleteId">
 </form>
 </div></div></div>
 
-<!-- Modal thay thế khi trùng -->
 <div class="modal fade" id="modalReplace" tabindex="-1" data-bs-backdrop="static"><div class="modal-dialog"><div class="modal-content">
 <div class="modal-header bg-warning"><h5 class="modal-title"><i class="bi bi-exclamation-triangle"></i> Trùng phân công</h5></div>
 <div class="modal-body">
@@ -556,7 +559,6 @@ Tổng <b><?= number_format($load['total'],2) ?></b>/<?= number_format($load['qu
 </div>
 </div></div></div>
 
-<!-- Modal rà soát -->
 <div class="modal fade" id="modalAudit" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
 <div class="modal-header"><h5 class="modal-title"><i class="bi bi-search"></i> Rà soát phân công</h5>
 <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
@@ -567,17 +569,14 @@ Tổng <b><?= number_format($load['total'],2) ?></b>/<?= number_format($load['qu
 <div class="col"><div class="border rounded p-2"><div class="fs-4 fw-bold text-warning"><?= count($under) ?></div><div class="small">Thiếu tiết</div></div></div>
 <div class="col"><div class="border rounded p-2"><div class="fs-4 fw-bold text-danger"><?= count($over) ?></div><div class="small">Thừa tiết</div></div></div>
 </div>
-
 <h6 class="text-danger">Trùng môn + lớp</h6>
 <?php if ($conflicts): ?><table class="table table-sm"><thead><tr><th>Môn</th><th>Lớp</th><th>GV</th></tr></thead><tbody>
 <?php foreach ($conflicts as $c): ?><tr class="table-warning"><td><?= e($c['subject']) ?></td><td><?= e($c['class']) ?></td><td><?= e(implode(', ',$c['teachers'])) ?></td></tr><?php endforeach; ?>
 </tbody></table><?php else: ?><p class="text-success small">Không trùng.</p><?php endif; ?>
-
-<h6>Thiếu môn + lớp <input type="search" id="missF" class="form-control form-control-sm d-inline-block" style="width:140px" placeholder="Lọc"></h6>
-<?php if ($missing): ?><div style="max-height:180px;overflow:auto"><table class="table table-sm" id="missTbl"><tbody>
-<?php foreach ($missing as $m): ?><tr data-s="<?= e(mb_strtolower($m['subject'].' '.$m['class'],'UTF-8')) ?>"><td><?= e($m['subject']) ?></td><td><?= e($m['class']) ?></td><td><?= e($m['periods']) ?>t</td></tr><?php endforeach; ?>
+<h6>Thiếu môn + lớp</h6>
+<?php if ($missing): ?><div style="max-height:180px;overflow:auto"><table class="table table-sm"><tbody>
+<?php foreach ($missing as $m): ?><tr><td><?= e($m['subject']) ?></td><td><?= e($m['class']) ?></td><td><?= e($m['periods']) ?>t</td></tr><?php endforeach; ?>
 </tbody></table></div><?php else: ?><p class="text-success small">Không thiếu.</p><?php endif; ?>
-
 <div class="row">
 <div class="col-md-6"><h6 class="text-warning">Thiếu tiết</h6>
 <table class="table table-sm"><tbody>
@@ -594,11 +593,10 @@ Tổng <b><?= number_format($load['total'],2) ?></b>/<?= number_format($load['qu
 <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button></div>
 </div></div></div>
 
-<!-- Modal đổi chéo -->
 <div class="modal fade" id="modalSwap" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
 <div class="modal-header bg-warning"><h5 class="modal-title">Đổi chéo toàn bộ 2 GV</h5>
 <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-<form method="post" onsubmit="return confirm('Đổi toàn bộ dạy + KN giữa 2 GV? Không hoàn tác!')">
+<form method="post" class="pccm-keep" onsubmit="return confirm('Đổi toàn bộ dạy + KN giữa 2 GV? Không hoàn tác!')">
 <input type="hidden" name="action" value="swap_all">
 <div class="modal-body">
 <div class="warn-box small">Đổi tất cả phân công dạy và kiêm nhiệm giữa 2 giáo viên.</div>
@@ -615,7 +613,94 @@ Tổng <b><?= number_format($load['total'],2) ?></b>/<?= number_format($load['qu
 </div></div></div>
 
 <script>
-// Số tiết
+(function(){
+  var KEY = 'pccm_them_state';
+  function loadState(){ try { return JSON.parse(sessionStorage.getItem(KEY)||'{}'); } catch(e){ return {}; } }
+  function saveState(patch){
+    var s = loadState();
+    Object.keys(patch).forEach(function(k){ s[k]=patch[k]; });
+    sessionStorage.setItem(KEY, JSON.stringify(s));
+  }
+  function clearFilters(){
+    var s = loadState();
+    s.q=''; s.level=''; s.group=''; s.load='';
+    sessionStorage.setItem(KEY, JSON.stringify(s));
+    applyFilters();
+  }
+
+  function applyFilters(){
+    var q = (document.getElementById('boardFilter')?.value||'').toLowerCase().trim();
+    var level = document.getElementById('fLevel')?.value||'';
+    var group = document.getElementById('fGroup')?.value||'';
+    var load = document.getElementById('fLoad')?.value||'';
+    var shown = 0, total = 0;
+    document.querySelectorAll('#boardBody .board-row').forEach(function(row){
+      total++;
+      var ok = true;
+      if (q && !(row.dataset.search||'').includes(q)) ok = false;
+      if (ok && level && !(row.dataset.level||'').includes(level)) ok = false;
+      if (ok && group === 'khxh' && row.dataset.khxh !== '1') ok = false;
+      if (ok && group === 'khtn' && row.dataset.khtn !== '1') ok = false;
+      if (ok && load && row.dataset.load !== load) ok = false;
+      row.style.display = ok ? '' : 'none';
+      if (ok) shown++;
+    });
+    var fc = document.getElementById('fCount');
+    if (fc) fc.textContent = shown + '/' + total + ' GV';
+    saveState({ q:q, level:level, group:group, load:load });
+  }
+
+  // Khôi phục bộ lọc đã lưu
+  var st = loadState();
+  if (document.getElementById('boardFilter')) document.getElementById('boardFilter').value = st.q||'';
+  if (document.getElementById('fLevel')) document.getElementById('fLevel').value = st.level||'';
+  if (document.getElementById('fGroup')) document.getElementById('fGroup').value = st.group||'';
+  if (document.getElementById('fLoad')) document.getElementById('fLoad').value = st.load||'';
+  applyFilters();
+
+  ['boardFilter','fLevel','fGroup','fLoad'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener(id==='boardFilter'?'input':'change', applyFilters);
+  });
+  document.getElementById('fClear')?.addEventListener('click', function(){
+    document.getElementById('boardFilter').value = '';
+    document.getElementById('fLevel').value = '';
+    document.getElementById('fGroup').value = '';
+    document.getElementById('fLoad').value = '';
+    clearFilters();
+  });
+
+  // Lưu vị trí cuộn trước khi submit form
+  function rememberScroll(){
+    var board = document.getElementById('boardBody');
+    saveState({
+      scrollY: window.scrollY || window.pageYOffset || 0,
+      boardScroll: board ? board.scrollTop : 0,
+      q: document.getElementById('boardFilter')?.value||'',
+      level: document.getElementById('fLevel')?.value||'',
+      group: document.getElementById('fGroup')?.value||'',
+      load: document.getElementById('fLoad')?.value||''
+    });
+  }
+  document.querySelectorAll('form').forEach(function(f){
+    f.addEventListener('submit', rememberScroll);
+  });
+
+  // Khôi phục cuộn sau load
+  var restore = loadState();
+  if (typeof restore.scrollY === 'number') {
+    requestAnimationFrame(function(){
+      window.scrollTo(0, restore.scrollY);
+      var board = document.getElementById('boardBody');
+      if (board && typeof restore.boardScroll === 'number') board.scrollTop = restore.boardScroll;
+    });
+  } else if (<?= !empty($_GET['ok']) ? 'true' : 'false' ?>) {
+    document.getElementById('board')?.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+})();
+
+// Số tiết auto
 const subjectSelect = document.getElementById('subject');
 const classSelect = document.getElementById('class_name');
 const periodsDisplay = document.getElementById('periods-display');
@@ -637,28 +722,12 @@ function fetchPeriods() {
     });
 }
 if (subjectSelect) { subjectSelect.addEventListener('change', fetchPeriods); classSelect.addEventListener('change', fetchPeriods); fetchPeriods(); }
-
 const roleSelect = document.getElementById('roleSelect');
 if (roleSelect) roleSelect.addEventListener('change', function() {
   const opt = this.options[this.selectedIndex];
   document.getElementById('roleClassWrap').style.opacity = opt?.dataset?.needClass === '1' ? '1' : '0.55';
 });
 
-// Lọc bảng
-document.getElementById('boardFilter')?.addEventListener('input', function() {
-  const q = this.value.toLowerCase().trim();
-  document.querySelectorAll('#boardBody .board-row').forEach(row => {
-    row.style.display = !q || (row.dataset.search||'').includes(q) ? '' : 'none';
-  });
-});
-document.getElementById('missF')?.addEventListener('input', function() {
-  const q = this.value.toLowerCase().trim();
-  document.querySelectorAll('#missTbl tr').forEach(tr => {
-    tr.style.display = !q || (tr.dataset.s||'').includes(q) ? '' : 'none';
-  });
-});
-
-// Kéo thả
 let dragId = null;
 function onDragChip(e) {
   dragId = e.currentTarget.dataset.id;
@@ -673,13 +742,11 @@ function onDropChip(e, el) {
   if (!id || !to) return;
   const fromChip = document.querySelector('.chip[data-id="'+id+'"]');
   if (fromChip && fromChip.dataset.teacher === to) return;
-  if (!confirm('Chuyển phân công sang « ' + to + ' »?\n(Nếu trùng môn+lớp với người khác sẽ thay thế.)')) return;
+  if (!confirm('Chuyển phân công sang « ' + to + ' »?')) return;
   document.getElementById('moveId').value = id;
   document.getElementById('moveTo').value = to;
   document.getElementById('formMove').submit();
 }
-
-// Bấm chip → modal sửa
 function openChipModal(el) {
   document.getElementById('chipId').value = el.dataset.id;
   document.getElementById('chipDeleteId').value = el.dataset.id;
@@ -694,7 +761,6 @@ document.getElementById('btnChipDelete')?.addEventListener('click', function() {
   if (confirm('Xóa phân công này?')) document.getElementById('formChipDelete').submit();
 });
 
-// Popup thay thế
 <?php if ($ask_replace): ?>
 (function(){
   document.getElementById('rpSubject').textContent = <?= json_encode($_GET['subject'] ?? '') ?>;
@@ -708,7 +774,6 @@ document.getElementById('btnChipDelete')?.addEventListener('click', function() {
   new bootstrap.Modal(document.getElementById('modalReplace')).show();
 })();
 <?php endif; ?>
-
 <?php if ($ask_replace_role): ?>
 (function(){
   document.getElementById('rpSubject').textContent = <?= json_encode($_GET['role'] ?? '') ?>;
@@ -721,11 +786,6 @@ document.getElementById('btnChipDelete')?.addEventListener('click', function() {
   };
   new bootstrap.Modal(document.getElementById('modalReplace')).show();
 })();
-<?php endif; ?>
-
-// Sau khi thêm thành công → cuộn xuống bảng
-<?php if (!empty($_GET['ok'])): ?>
-document.getElementById('board')?.scrollIntoView({behavior:'smooth', block:'start'});
 <?php endif; ?>
 </script>
 <?php require_once 'includes/footer.php'; ?>
