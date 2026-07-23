@@ -6,6 +6,9 @@ define('ADMIN_PASS', 'Xinman@2021');
 
 /** Giáo viên tập sự được giảm bao nhiêu tiết so với định mức */
 if (!defined('TAP_SU_QUOTA_REDUCTION')) define('TAP_SU_QUOTA_REDUCTION', 2);
+/** Định mức cố định Hiệu trưởng / Phó hiệu trưởng */
+if (!defined('QUOTA_HIEU_TRUONG')) define('QUOTA_HIEU_TRUONG', 2);
+if (!defined('QUOTA_PHO_HIEU_TRUONG')) define('QUOTA_PHO_HIEU_TRUONG', 4);
 
 function load_json($file, $default = []) {
     if (file_exists($file)) {
@@ -74,6 +77,8 @@ function init_data() {
             'quota_thcs' => DEFAULT_QUOTA_THCS,
             'quota_thpt' => DEFAULT_QUOTA_THPT,
             'tap_su_reduction' => TAP_SU_QUOTA_REDUCTION,
+            'quota_hieu_truong' => QUOTA_HIEU_TRUONG,
+            'quota_pho_hieu_truong' => QUOTA_PHO_HIEU_TRUONG,
         ]);
     }
     migrate_legacy_if_needed();
@@ -84,6 +89,8 @@ function get_settings() {
         'quota_thcs' => DEFAULT_QUOTA_THCS,
         'quota_thpt' => DEFAULT_QUOTA_THPT,
         'tap_su_reduction' => TAP_SU_QUOTA_REDUCTION,
+        'quota_hieu_truong' => QUOTA_HIEU_TRUONG,
+        'quota_pho_hieu_truong' => QUOTA_PHO_HIEU_TRUONG,
     ]);
 }
 function save_settings($s) { save_json(SETTINGS_FILE, $s); }
@@ -99,6 +106,16 @@ function get_tap_su_reduction() {
     $s = get_settings();
     $r = $s['tap_su_reduction'] ?? TAP_SU_QUOTA_REDUCTION;
     return is_numeric($r) ? floatval($r) : TAP_SU_QUOTA_REDUCTION;
+}
+function get_quota_hieu_truong() {
+    $s = get_settings();
+    $r = $s['quota_hieu_truong'] ?? QUOTA_HIEU_TRUONG;
+    return is_numeric($r) ? floatval($r) : QUOTA_HIEU_TRUONG;
+}
+function get_quota_pho_hieu_truong() {
+    $s = get_settings();
+    $r = $s['quota_pho_hieu_truong'] ?? QUOTA_PHO_HIEU_TRUONG;
+    return is_numeric($r) ? floatval($r) : QUOTA_PHO_HIEU_TRUONG;
 }
 
 function get_teachers() { global $DEFAULT_TEACHERS; return load_json(TEACHERS_FILE, $DEFAULT_TEACHERS); }
@@ -137,6 +154,8 @@ function get_teacher_flags($name) {
         'thcs' => $thcs,
         'thpt' => $thpt,
         'tap_su' => !empty($m['tap_su']),
+        'hieu_truong' => !empty($m['hieu_truong']),
+        'pho_hieu_truong' => !empty($m['pho_hieu_truong']),
         'group' => $m['group'] ?? '',
         'chuyen_mon' => $cm,
     ];
@@ -150,6 +169,10 @@ function set_teacher_flags($name, $flags) {
     $meta[$name]['thcs'] = !empty($flags['thcs']);
     $meta[$name]['thpt'] = !empty($flags['thpt']);
     $meta[$name]['tap_su'] = !empty($flags['tap_su']);
+    $meta[$name]['hieu_truong'] = !empty($flags['hieu_truong']);
+    $meta[$name]['pho_hieu_truong'] = !empty($flags['pho_hieu_truong']);
+    // HT và PHT loại trừ lẫn nhau
+    if (!empty($meta[$name]['hieu_truong'])) $meta[$name]['pho_hieu_truong'] = false;
     if (!empty($flags['thpt']) && empty($flags['thcs'])) $meta[$name]['level'] = 'THPT';
     elseif (!empty($flags['thcs'])) $meta[$name]['level'] = 'THCS';
     else $meta[$name]['level'] = 'THCS';
@@ -196,11 +219,20 @@ function set_teacher_group($name, $group) {
 
 /**
  * Định mức tiết/tuần của giáo viên.
- * - Theo cấp THCS / THPT
- * - Nếu tích Tập sự → giảm thêm get_tap_su_reduction() tiết (mặc định 2)
+ * Ưu tiên:
+ * 1. Hiệu trưởng → 2 tiết/tuần
+ * 2. Phó hiệu trưởng → 4 tiết/tuần
+ * 3. Theo cấp THCS / THPT
+ * 4. Nếu tích Tập sự → giảm thêm get_tap_su_reduction() tiết (mặc định 2)
  */
 function get_quota($name) {
     $f = get_teacher_flags($name);
+    if (!empty($f['hieu_truong'])) {
+        return get_quota_hieu_truong();
+    }
+    if (!empty($f['pho_hieu_truong'])) {
+        return get_quota_pho_hieu_truong();
+    }
     if ($f['thpt'] && !$f['thcs']) {
         $q = get_quota_thpt();
     } else {
