@@ -2,7 +2,6 @@
 $page_title = 'Kết quả phân công';
 require_once 'includes/functions.php';
 
-// Tạo / chọn / xóa phiên bản (cần đăng nhập)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && is_logged_in()) {
     $action = $_POST['action'] ?? '';
 
@@ -55,7 +54,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && is_logged_in()) {
 require_once 'includes/header.php';
 
 $versions = get_versions();
-// Sắp theo ngày mới nhất
 usort($versions, fn($a, $b) => strcmp($b['date'] ?? '', $a['date'] ?? ''));
 
 $view_id = $_GET['v'] ?? get_active_version_id();
@@ -66,6 +64,7 @@ $active_id = get_active_version_id();
 $assignments = $view_id ? get_assignments($view_id) : [];
 $role_assignments = $view_id ? get_role_assignments($view_id) : [];
 $loads = $view_id ? get_teacher_loads($view_id) : [];
+$stats = $view_id ? get_assignment_stats($view_id) : null;
 
 $by_teacher = [];
 foreach ($assignments as $a) { $by_teacher[$a['teacher']][] = $a; }
@@ -80,14 +79,20 @@ $total_role = array_sum(array_column($loads, 'role'));
 
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
     <h3 class="mb-0"><i class="bi bi-clipboard-data"></i> Kết quả phân công</h3>
-    <?php if (is_logged_in()): ?>
-    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCreate">
-        <i class="bi bi-plus-lg"></i> Tạo phiên bản mới
-    </button>
-    <?php endif; ?>
+    <div class="d-flex flex-wrap gap-2">
+        <?php if ($view_id): ?>
+        <a href="<?= BASE_URL ?>thongke.php?v=<?= e($view_id) ?>" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-bar-chart-line"></i> Thống kê
+        </a>
+        <?php endif; ?>
+        <?php if (is_logged_in()): ?>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCreate">
+            <i class="bi bi-plus-lg"></i> Tạo phiên bản mới
+        </button>
+        <?php endif; ?>
+    </div>
 </div>
 
-<!-- Danh sách phiên bản -->
 <div class="card mb-4">
 <div class="card-header">Các phiên bản phân công</div>
 <div class="card-body p-0">
@@ -111,6 +116,7 @@ $total_role = array_sum(array_column($loads, 'role'));
     </td>
     <td class="text-nowrap">
         <a href="<?= BASE_URL ?>ketqua.php?v=<?= e($v['id']) ?>" class="btn btn-outline-primary btn-sm">Xem</a>
+        <a href="<?= BASE_URL ?>thongke.php?v=<?= e($v['id']) ?>" class="btn btn-outline-secondary btn-sm" title="Thống kê"><i class="bi bi-bar-chart-line"></i></a>
         <?php if (is_logged_in() && $v['id'] !== $active_id): ?>
         <form method="post" class="d-inline">
             <input type="hidden" name="action" value="activate">
@@ -141,12 +147,19 @@ $total_role = array_sum(array_column($loads, 'role'));
     <?php if ($view['id'] === $active_id): ?>
     <span class="badge bg-success ms-2">Đang làm việc (Thêm/Sửa sẽ ghi vào phiên bản này)</span>
     <?php endif; ?>
+    <a href="<?= BASE_URL ?>thongke.php?v=<?= e($view_id) ?>" class="ms-2">Xem thống kê chi tiết →</a>
 </div>
 
-<div class="row g-2 mb-4">
-    <div class="col-md-4"><div class="card stat-card py-2"><div class="number fs-4"><?= number_format($total_day, 1) ?></div><div class="label">Tổng tiết dạy môn</div></div></div>
-    <div class="col-md-4"><div class="card stat-card py-2"><div class="number fs-4 text-info"><?= number_format($total_role, 1) ?></div><div class="label">Tổng tiết kiêm nhiệm</div></div></div>
-    <div class="col-md-4"><div class="card stat-card py-2"><div class="number fs-4 text-primary"><?= number_format($total_all, 1) ?></div><div class="label">Tổng cộng tiết</div></div></div>
+<div class="row g-2 mb-3">
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="number fs-4"><?= number_format($total_day, 1) ?></div><div class="label">Tổng tiết dạy môn</div></div></div>
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="number fs-4 text-info"><?= number_format($total_role, 1) ?></div><div class="label">Tổng tiết kiêm nhiệm</div></div></div>
+    <div class="col-md-3"><div class="card stat-card py-2"><div class="number fs-4 text-primary"><?= number_format($total_all, 1) ?></div><div class="label">Tổng cộng tiết</div></div></div>
+    <?php if ($stats): ?>
+    <div class="col-md-3"><div class="card stat-card py-2">
+        <div class="number fs-4 <?= $stats['slots_missing']?'text-danger':'text-success' ?>"><?= (int)$stats['slots_missing'] ?></div>
+        <div class="label">Ô thiếu môn+lớp · <a href="<?= BASE_URL ?>thongke.php?v=<?= e($view_id) ?>" class="small">Chi tiết</a></div>
+    </div></div>
+    <?php endif; ?>
 </div>
 
 <?php if ($all_names): ?>
@@ -186,7 +199,7 @@ $total_role = array_sum(array_column($loads, 'role'));
             <?php endif; ?>
             <?php if ($lines): ?>
             <strong><i class="bi bi-book"></i> Dạy môn</strong>
-            <pre class="summary-text mt-2"><?= e(implode("\n", $lines)) ?></pre>
+            <pre class="mt-2 mb-2 p-2 bg-light border rounded small"><?= e(implode("\n", $lines)) ?></pre>
             <table class="table table-sm table-bordered">
             <thead><tr><th>Môn</th><th>Lớp</th><th class="text-center">Tiết</th><th>Ghi chú</th></tr></thead>
             <tbody>
@@ -215,7 +228,6 @@ $total_role = array_sum(array_column($loads, 'role'));
 <?php endif; ?>
 
 <?php if (is_logged_in()): ?>
-<!-- Modal tạo phiên bản -->
 <div class="modal fade" id="modalCreate" tabindex="-1">
 <div class="modal-dialog">
 <form method="post" class="modal-content">
