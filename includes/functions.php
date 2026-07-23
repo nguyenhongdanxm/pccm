@@ -4,9 +4,7 @@ require_once __DIR__ . '/config.php';
 define('ADMIN_USER', 'admin');
 define('ADMIN_PASS', 'Xinman@2021');
 
-/** Giáo viên tập sự được giảm bao nhiêu tiết so với định mức */
 if (!defined('TAP_SU_QUOTA_REDUCTION')) define('TAP_SU_QUOTA_REDUCTION', 2);
-/** Định mức cố định Hiệu trưởng / Phó hiệu trưởng */
 if (!defined('QUOTA_HIEU_TRUONG')) define('QUOTA_HIEU_TRUONG', 2);
 if (!defined('QUOTA_PHO_HIEU_TRUONG')) define('QUOTA_PHO_HIEU_TRUONG', 4);
 
@@ -171,7 +169,6 @@ function set_teacher_flags($name, $flags) {
     $meta[$name]['tap_su'] = !empty($flags['tap_su']);
     $meta[$name]['hieu_truong'] = !empty($flags['hieu_truong']);
     $meta[$name]['pho_hieu_truong'] = !empty($flags['pho_hieu_truong']);
-    // HT và PHT loại trừ lẫn nhau
     if (!empty($meta[$name]['hieu_truong'])) $meta[$name]['pho_hieu_truong'] = false;
     if (!empty($flags['thpt']) && empty($flags['thcs'])) $meta[$name]['level'] = 'THPT';
     elseif (!empty($flags['thcs'])) $meta[$name]['level'] = 'THCS';
@@ -182,7 +179,6 @@ function set_teacher_flags($name, $flags) {
 function get_teacher_chuyen_mon($name) {
     return get_teacher_flags($name)['chuyen_mon'] ?? [];
 }
-
 function set_teacher_chuyen_mon($name, $subjects) {
     if (!is_array($subjects)) {
         $subjects = $subjects === '' || $subjects === null ? [] : [$subjects];
@@ -190,7 +186,6 @@ function set_teacher_chuyen_mon($name, $subjects) {
     $subjects = array_values(array_unique(array_filter(array_map('trim', $subjects))));
     set_teacher_meta_field($name, 'chuyen_mon', $subjects);
 }
-
 function get_teacher_level($name) {
     $f = get_teacher_flags($name);
     if ($f['thpt'] && !$f['thcs']) return 'THPT';
@@ -217,30 +212,13 @@ function set_teacher_group($name, $group) {
     set_teacher_meta_field($name, 'group', $group);
 }
 
-/**
- * Định mức tiết/tuần của giáo viên.
- * Ưu tiên:
- * 1. Hiệu trưởng → 2 tiết/tuần
- * 2. Phó hiệu trưởng → 4 tiết/tuần
- * 3. Theo cấp THCS / THPT
- * 4. Nếu tích Tập sự → giảm thêm get_tap_su_reduction() tiết (mặc định 2)
- */
 function get_quota($name) {
     $f = get_teacher_flags($name);
-    if (!empty($f['hieu_truong'])) {
-        return get_quota_hieu_truong();
-    }
-    if (!empty($f['pho_hieu_truong'])) {
-        return get_quota_pho_hieu_truong();
-    }
-    if ($f['thpt'] && !$f['thcs']) {
-        $q = get_quota_thpt();
-    } else {
-        $q = get_quota_thcs();
-    }
-    if (!empty($f['tap_su'])) {
-        $q = max(0, $q - get_tap_su_reduction());
-    }
+    if (!empty($f['hieu_truong'])) return get_quota_hieu_truong();
+    if (!empty($f['pho_hieu_truong'])) return get_quota_pho_hieu_truong();
+    if ($f['thpt'] && !$f['thcs']) $q = get_quota_thpt();
+    else $q = get_quota_thcs();
+    if (!empty($f['tap_su'])) $q = max(0, $q - get_tap_su_reduction());
     return $q;
 }
 
@@ -358,6 +336,180 @@ function get_periods($subject, $class_name) {
     $subjects = get_subjects();
     return $subjects[$subject][get_grade($class_name)] ?? null;
 }
+
+/**
+ * Thống kê phân công so với tiết chuẩn chương trình (theo môn–khối).
+ */
+function get_assignment_stats($vid = null) {
+    $vid = $vid ?: get_active_version_id();
+    $subjects = get_subjects();
+    $classes = get_classes();
+    $assignments = get_assignments($vid);
+    $role_items = get_role_assignments($vid);
+
+    // Map: subject|class => periods, teachers
+    $map = [];
+    $by_class_assigned = [];
+    $by_subject_assigned = [];
+    $total_day = 0;
+    foreach ($assignments as $a) {
+        $p = floatval($a['periods'] ?? 0);
+        $total_day += $p;
+        $cls = $a['class'] ?? '';
+        $sub = $a['subject'] ?? '';
+        $key = $sub . '|' . $cls;
+        if (!isset($map[$key])) $map[$key] = ['periods' => 0, 'teachers' => []];
+        $map[$key]['periods'] += $p;
+        if (!empty($a['teacher'])) $map[$key]['teachers'][] = $a['teacher'];
+        $by_class_assigned[$cls] = ($by_class_assigned[$cls] ?? 0) + $p;
+        $by_subject_assigned[$sub] = ($by_subject_assigned[$sub] ?? 0) + $p;
+    }
+
+    $total_role = 0;
+    foreach ($role_items as $a) $total_role += floatval($a['periods'] ?? 0);
+
+    $by_class = [];
+    $by_grade = [];
+    $by_subject = [];
+    $missing_list = [];
+    $diff_list = [];
+    $conflict_list = [];
+    $slots_ok = 0;
+    $slots_missing = 0;
+    $slots_diff = 0;
+    $total_std = 0;
+    $classes_ok = 0;
+
+    // Conflicts: more than 1 unique teacher for same subject+class
+    foreach ($map as $key => $info) {
+        $teachers = array_values(array_unique($info['teachers']));
+        if (count($teachers) > 1) {
+            [$sub, $cls] = explode('|', $key, 2);
+            $conflict_list[] = ['subject' => $sub, 'class' => $cls, 'teachers' => $teachers];
+        }
+    }
+
+    foreach ($classes as $cls) {
+        $grade = get_grade($cls);
+        $level = (intval($grade) >= 10) ? 'THPT' : 'THCS';
+        $std = 0;
+        $assigned = floatval($by_class_assigned[$cls] ?? 0);
+        $miss = [];
+        $pdiffs = [];
+        $class_ok = true;
+
+        foreach ($subjects as $sub => $grades) {
+            if (!is_array($grades) || !isset($grades[$grade])) continue;
+            $sp = floatval($grades[$grade]);
+            if ($sp <= 0) continue;
+
+            $std += $sp;
+            if (!isset($by_subject[$sub])) {
+                $by_subject[$sub] = ['std' => 0, 'assigned' => 0, 'ok' => 0, 'missing' => 0, 'diff_count' => 0];
+            }
+            $by_subject[$sub]['std'] += $sp;
+
+            $key = $sub . '|' . $cls;
+            $ap = floatval($map[$key]['periods'] ?? 0);
+
+            if ($ap <= 0.0001) {
+                $slots_missing++;
+                $class_ok = false;
+                $miss[] = $sub . ' (' . rtrim(rtrim(number_format($sp, 2, '.', ''), '0'), '.') . 't)';
+                $missing_list[] = ['class' => $cls, 'subject' => $sub, 'std' => $sp];
+                $by_subject[$sub]['missing']++;
+            } elseif (abs($ap - $sp) > 0.05) {
+                $slots_diff++;
+                $class_ok = false;
+                $pdiffs[] = $sub . ': ' . $ap . '/' . $sp;
+                $diff_list[] = [
+                    'class' => $cls,
+                    'subject' => $sub,
+                    'std' => $sp,
+                    'assigned' => $ap,
+                    'teachers' => $map[$key]['teachers'] ?? [],
+                ];
+                $by_subject[$sub]['diff_count']++;
+            } else {
+                $slots_ok++;
+                $by_subject[$sub]['ok']++;
+            }
+        }
+
+        $total_std += $std;
+        $diff = $assigned - $std;
+        $status = 'ok';
+        if ($miss) $status = 'missing';
+        elseif ($pdiffs) $status = 'diff';
+        if ($status === 'ok') $classes_ok++;
+
+        $by_class[] = [
+            'class' => $cls,
+            'grade' => $grade,
+            'level' => $level,
+            'std' => $std,
+            'assigned' => $assigned,
+            'diff' => $diff,
+            'missing' => $miss,
+            'period_diffs' => $pdiffs,
+            'status' => $status,
+        ];
+
+        if (!isset($by_grade[$grade])) {
+            $by_grade[$grade] = [
+                'level' => $level,
+                'class_count' => 0,
+                'std' => 0,
+                'assigned' => 0,
+                'std_per_class' => 0,
+                'classes_ok' => 0,
+            ];
+        }
+        $by_grade[$grade]['class_count']++;
+        $by_grade[$grade]['std'] += $std;
+        $by_grade[$grade]['assigned'] += $assigned;
+        if ($status === 'ok') $by_grade[$grade]['classes_ok']++;
+        // std per class = curriculum for one class of this grade
+        $by_grade[$grade]['std_per_class'] = $std; // last class same grade should match
+    }
+
+    // Fill subject assigned totals
+    foreach ($by_subject as $sub => &$row) {
+        $row['assigned'] = floatval($by_subject_assigned[$sub] ?? 0);
+        $row['diff'] = $row['assigned'] - $row['std'];
+    }
+    unset($row);
+    ksort($by_subject);
+
+    foreach ($by_grade as $g => &$row) {
+        $row['diff'] = $row['assigned'] - $row['std'];
+        if ($row['class_count'] > 0 && $row['std_per_class'] <= 0) {
+            $row['std_per_class'] = $row['std'] / $row['class_count'];
+        }
+    }
+    unset($row);
+    ksort($by_grade, SORT_NUMERIC);
+
+    return [
+        'total_assigned' => $total_day,
+        'total_std' => $total_std,
+        'total_diff' => $total_day - $total_std,
+        'total_role' => $total_role,
+        'slots_ok' => $slots_ok,
+        'slots_missing' => $slots_missing,
+        'slots_diff' => $slots_diff,
+        'slots_conflict' => count($conflict_list),
+        'classes_ok' => $classes_ok,
+        'classes_total' => count($classes),
+        'by_class' => $by_class,
+        'by_grade' => $by_grade,
+        'by_subject' => $by_subject,
+        'missing_list' => $missing_list,
+        'diff_list' => $diff_list,
+        'conflict_list' => $conflict_list,
+    ];
+}
+
 function flash($message, $type = 'success') { $_SESSION['flash'] = ['message'=>$message,'type'=>$type]; }
 
 function show_flash() {
