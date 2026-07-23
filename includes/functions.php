@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/subject_meta.php';
 
 define('ADMIN_USER', 'admin');
 define('ADMIN_PASS', 'Xinman@2021');
@@ -70,6 +71,7 @@ function init_data() {
     if (!file_exists(ROLES_FILE)) save_json(ROLES_FILE, $DEFAULT_ROLES);
     if (!file_exists(TEACHER_META_FILE)) save_json(TEACHER_META_FILE, []);
     if (!file_exists(GROUPS_FILE)) save_json(GROUPS_FILE, $DEFAULT_GROUPS);
+    if (!file_exists(SUBJECT_META_FILE)) save_json(SUBJECT_META_FILE, []);
     if (!file_exists(SETTINGS_FILE)) {
         save_json(SETTINGS_FILE, [
             'quota_thcs' => DEFAULT_QUOTA_THCS,
@@ -333,15 +335,10 @@ function get_export_rows($vid = null) {
 
 function get_grade($class_name) { return preg_replace('/[^0-9]/', '', $class_name); }
 
-/**
- * Số tiết chuẩn của môn cho 1 lớp.
- * Ưu tiên khóa đúng tên lớp (10A, 10B…), nếu không có thì dùng khối (10).
- */
 function resolve_std_period($grades_data, $class_name) {
     if (!is_array($grades_data)) return null;
     if (isset($grades_data[$class_name]) && $grades_data[$class_name] !== '' && $grades_data[$class_name] !== null) {
-        $v = floatval($grades_data[$class_name]);
-        return $v; // cho phép 0 nghĩa là không dạy
+        return floatval($grades_data[$class_name]);
     }
     $grade = get_grade($class_name);
     if ($grade !== '' && isset($grades_data[$grade]) && $grades_data[$grade] !== '' && $grades_data[$grade] !== null) {
@@ -353,15 +350,15 @@ function resolve_std_period($grades_data, $class_name) {
 function get_periods($subject, $class_name) {
     $subjects = get_subjects();
     if (!isset($subjects[$subject])) return null;
+    // Tôn trọng ẩn theo cấp
+    $level = (intval(get_grade($class_name)) >= 10) ? 'thpt' : 'thcs';
+    if (!is_subject_visible_for_level($subject, $level)) return null;
     $v = resolve_std_period($subjects[$subject], $class_name);
     if ($v === null) return null;
-    if ($v <= 0) return null; // 0 = không dạy môn này ở lớp đó
+    if ($v <= 0) return null;
     return $v;
 }
 
-/**
- * Thống kê phân công so với tiết chuẩn (THCS theo khối, THPT theo lớp).
- */
 function get_assignment_stats($vid = null) {
     $vid = $vid ?: get_active_version_id();
     $subjects = get_subjects();
@@ -412,12 +409,14 @@ function get_assignment_stats($vid = null) {
     foreach ($classes as $cls) {
         $grade = get_grade($cls);
         $level = (intval($grade) >= 10) ? 'THPT' : 'THCS';
+        $level_key = (intval($grade) >= 10) ? 'thpt' : 'thcs';
         $std = 0;
         $assigned = floatval($by_class_assigned[$cls] ?? 0);
         $miss = [];
         $pdiffs = [];
 
         foreach ($subjects as $sub => $grades) {
+            if (!is_subject_visible_for_level($sub, $level_key)) continue;
             $sp = resolve_std_period($grades, $cls);
             if ($sp === null || $sp <= 0) continue;
 
