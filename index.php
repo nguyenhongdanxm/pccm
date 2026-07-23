@@ -112,105 +112,94 @@ if (is_logged_in()) {
     exit;
 }
 
-// ===== KHÁCH (chưa đăng nhập) =====
+// ===== KHÁCH (chưa đăng nhập) – giao diện sạch, chuyên nghiệp =====
 require_once 'includes/header.php';
 ?>
 <style>
-.landing-hero{
-  background:linear-gradient(145deg,#0d3a5c 0%,#1F4E79 40%,#2E6DA4 100%);
-  color:#fff;border-radius:20px;padding:2.5rem 2rem;text-align:center;
-  box-shadow:0 16px 40px rgba(13,58,92,.28);margin-bottom:1.75rem;position:relative;overflow:hidden
+.home-wrap{max-width:640px;margin:2.5rem auto 2rem;text-align:center;padding:0 1rem}
+.home-title{
+  font-size:clamp(1.55rem,4vw,2.1rem);
+  font-weight:700;
+  color:#1F4E79;
+  margin:0 0 .65rem;
+  line-height:1.3;
+  letter-spacing:-.01em;
 }
-.landing-hero::before{
-  content:'';position:absolute;inset:0;
-  background:radial-gradient(circle at 20% 20%,rgba(255,255,255,.12),transparent 45%),
-             radial-gradient(circle at 80% 70%,rgba(255,193,7,.12),transparent 40%);
-  pointer-events:none
+.home-author{
+  color:#495057;
+  font-size:1rem;
+  font-weight:500;
+  margin:0 0 2rem;
+  line-height:1.5;
+  /* không nền, không bo góc, không viền */
+  background:none;
+  border:none;
+  padding:0;
 }
-.landing-hero .logo-icon{font-size:3.2rem;opacity:.95}
-.landing-hero h1{font-size:clamp(1.6rem,4vw,2.35rem);font-weight:800;letter-spacing:-.02em;margin:.6rem 0 .35rem;position:relative}
-.landing-hero .app-code{display:inline-block;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:.2rem .9rem;font-weight:600;font-size:.85rem;letter-spacing:.06em}
-.landing-hero .tagline{opacity:.92;max-width:520px;margin:.75rem auto 0;font-size:1.05rem;position:relative}
-.landing-hero .author-block{margin-top:1.25rem;padding-top:1rem;border-top:1px solid rgba(255,255,255,.2);position:relative}
-.landing-hero .author-block .by{font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;opacity:.7}
-.landing-hero .author-block .name{font-size:1.15rem;font-weight:700}
-.landing-hero .author-block .school{font-size:.9rem;opacity:.85}
-.cta-card{border:none;border-radius:16px;box-shadow:0 4px 18px rgba(0,0,0,.07);transition:transform .15s,box-shadow .15s;height:100%;text-decoration:none;display:block;color:inherit}
-.cta-card:hover{transform:translateY(-3px);box-shadow:0 10px 28px rgba(0,0,0,.12);color:inherit}
-.cta-card .cta-icon{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;margin-bottom:.75rem}
-.cta-green .cta-icon{background:#d1e7dd;color:#0f5132}
-.cta-blue .cta-icon{background:#cfe2ff;color:#084298}
-.feat-panel{border:none;border-radius:16px;box-shadow:0 4px 18px rgba(0,0,0,.06)}
-.feat-panel .accordion-button{font-weight:600;color:#1F4E79;background:#fff}
-.feat-panel .accordion-button:not(.collapsed){background:#e8f0fe;color:#1F4E79;box-shadow:none}
-.feat-panel .accordion-button:focus{box-shadow:none;border-color:transparent}
-.feat-panel .feat-icon{width:36px;height:36px;border-radius:10px;background:#e8f0fe;color:#1F4E79;display:inline-flex;align-items:center;justify-content:center;margin-right:.65rem;flex-shrink:0}
-.feat-toggle-btn{border-radius:999px;font-weight:600}
+.home-author i{color:#1F4E79;margin-right:.35rem}
+.home-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:.75rem;margin-bottom:2.25rem}
+.home-actions .btn{
+  min-width:180px;
+  font-weight:600;
+  padding:.65rem 1.25rem;
+  border-radius:8px;
+}
+.home-features{text-align:left;border-top:1px solid #dee2e6;padding-top:1.25rem}
+.home-features .feat-head{
+  display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;margin-bottom:.5rem
+}
+.home-features .feat-head h2{
+  font-size:1.1rem;font-weight:700;color:#1F4E79;margin:0
+}
+.home-features .feat-head .hint{font-size:.85rem;color:#6c757d}
+.home-features .accordion-button{
+  font-weight:600;color:#1F4E79;background:transparent;box-shadow:none;padding:.7rem 0
+}
+.home-features .accordion-button:not(.collapsed){background:transparent;color:#1F4E79;box-shadow:none}
+.home-features .accordion-button:focus{box-shadow:none;border-color:transparent}
+.home-features .accordion-item{border:none;border-bottom:1px solid #eee;background:transparent}
+.home-features .accordion-body{padding:.25rem 0 .85rem;font-size:.9rem}
+.home-features .feat-ico{color:#1F4E79;margin-right:.5rem}
 </style>
 
-<div class="row justify-content-center">
-<div class="col-lg-9 col-xl-8">
+<div class="home-wrap">
 
-<div class="landing-hero">
-  <div class="logo-icon"><i class="bi bi-journal-bookmark-fill"></i></div>
-  <div class="app-code"><?= e($app['name']) ?> · v<?= e($app['version']) ?></div>
-  <h1><?= e($app['full_name']) ?></h1>
-  <p class="tagline mb-0"><?= e($app['tagline']) ?></p>
-  <p class="mb-0 mt-2" style="opacity:.8">Năm học <?= e($app['year']) ?></p>
-  <div class="author-block">
-    <div class="by">Thiết kế & phát triển bởi</div>
-    <div class="name"><?= e($app['author']) ?></div>
-    <div class="school"><?= e($app['school']) ?></div>
-  </div>
-</div>
+  <h1 class="home-title">Ứng dụng Phân công chuyên môn</h1>
+  <p class="home-author"><i class="bi bi-person-badge"></i>Thiết kế bởi thầy giáo Nguyễn Hồng Dân</p>
 
-<div class="row g-3 mb-4">
-  <div class="col-md-6">
-    <a href="<?= BASE_URL ?>ketqua.php" class="cta-card cta-green card">
-      <div class="card-body p-4">
-        <div class="cta-icon"><i class="bi bi-clipboard-data"></i></div>
-        <h5 class="fw-bold mb-1">Xem Kết quả</h5>
-        <p class="text-muted small mb-0">Xem các phiên bản phân công — không cần đăng nhập</p>
-      </div>
+  <div class="home-actions">
+    <a href="<?= BASE_URL ?>ketqua.php" class="btn btn-success">
+      <i class="bi bi-clipboard-data"></i> Xem phân công
+    </a>
+    <a href="<?= BASE_URL ?>login.php" class="btn btn-primary">
+      <i class="bi bi-box-arrow-in-right"></i> Đăng nhập quản trị
     </a>
   </div>
-  <div class="col-md-6">
-    <a href="<?= BASE_URL ?>login.php" class="cta-card cta-blue card">
-      <div class="card-body p-4">
-        <div class="cta-icon"><i class="bi bi-box-arrow-in-right"></i></div>
-        <h5 class="fw-bold mb-1">Đăng nhập Quản trị</h5>
-        <p class="text-muted small mb-0">Thêm · sửa · rà soát · xuất bảng phân công</p>
-      </div>
-    </a>
-  </div>
-</div>
 
-<div class="card feat-panel mb-3">
-  <div class="card-body p-3 p-md-4">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+  <div class="home-features">
+    <div class="feat-head">
       <div>
-        <h5 class="mb-0 fw-bold" style="color:#1F4E79"><i class="bi bi-stars"></i> Tính năng nổi bật</h5>
-        <div class="text-muted small"><?= count($features) ?> nhóm chức năng · tự cập nhật khi phần mềm có thêm tính năng</div>
+        <h2><i class="bi bi-stars"></i> Tính năng nổi bật</h2>
+        <div class="hint"><?= count($features) ?> nhóm · tự cập nhật khi có chức năng mới</div>
       </div>
-      <button class="btn btn-outline-primary btn-sm feat-toggle-btn" type="button" data-bs-toggle="collapse" data-bs-target="#featList" aria-expanded="false">
+      <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#featList" aria-expanded="false" id="featToggle">
         <i class="bi bi-chevron-down"></i> Xem chi tiết
       </button>
     </div>
 
     <div class="collapse" id="featList">
-      <div class="accordion accordion-flush mt-2" id="accPublic">
+      <div class="accordion accordion-flush" id="accPublic">
       <?php foreach ($features as $idx => $f): ?>
-        <div class="accordion-item border-0 border-bottom">
+        <div class="accordion-item">
           <h2 class="accordion-header">
-            <button class="accordion-button collapsed px-0" type="button" data-bs-toggle="collapse" data-bs-target="#fp<?= $idx ?>">
-              <span class="feat-icon"><i class="bi <?= e($f['icon']) ?>"></i></span>
-              <?= e($f['title']) ?>
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#fp<?= $idx ?>">
+              <i class="bi <?= e($f['icon']) ?> feat-ico"></i><?= e($f['title']) ?>
             </button>
           </h2>
           <div id="fp<?= $idx ?>" class="accordion-collapse collapse" data-bs-parent="#accPublic">
-            <div class="accordion-body px-0 pt-0">
-              <p class="text-muted small mb-2"><?= e($f['desc']) ?></p>
-              <ul class="small mb-0">
+            <div class="accordion-body text-muted">
+              <p class="mb-2"><?= e($f['desc']) ?></p>
+              <ul class="mb-0 ps-3">
                 <?php foreach ($f['items'] as $it): ?><li class="mb-1"><?= e($it) ?></li><?php endforeach; ?>
               </ul>
             </div>
@@ -220,18 +209,12 @@ require_once 'includes/header.php';
       </div>
     </div>
   </div>
-</div>
 
-<div class="text-center text-muted small mb-2">
-  <i class="bi bi-shield-check"></i> Khách xem Kết quả tự do · Chỉnh sửa cần tài khoản quản trị
-</div>
-
-</div>
 </div>
 
 <script>
 (function(){
-  var btn = document.querySelector('[data-bs-target="#featList"]');
+  var btn = document.getElementById('featToggle');
   var box = document.getElementById('featList');
   if (!btn || !box) return;
   box.addEventListener('shown.bs.collapse', function(){
