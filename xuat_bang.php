@@ -18,6 +18,12 @@ if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date_str, $m)) {
     $date_display = $date_str;
 }
 
+// URL tuyệt đối trong thư mục app (tránh base href / trang chủ gốc)
+function export_url($params = []) {
+    $q = http_build_query($params);
+    return BASE_URL . 'xuat_bang.php' . ($q ? '?' . $q : '');
+}
+
 // ===== Trang chọn loại xuất =====
 if ($mode === '') {
     $page_title = 'Xuất bảng';
@@ -46,7 +52,7 @@ if ($mode === '') {
 <div class="mb-2"><i class="bi bi-people fs-3 text-primary"></i></div>
 <h5 class="fw-bold">Danh sách giáo viên</h5>
 <p class="text-muted small">STT, họ tên, chuyên môn, tổ, cấp, tập sự</p>
-<a href="#" class="btn btn-primary btn-sm go-export" data-mode="gv">Xuất danh sách GV</a>
+<a href="<?= e(export_url(['mode'=>'gv','v'=>$vid])) ?>" class="btn btn-primary btn-sm go-export" data-mode="gv" target="_blank" rel="noopener">Xuất danh sách GV</a>
 </div></div></div>
 
 <div class="col-md-4">
@@ -56,8 +62,8 @@ if ($mode === '') {
 <h5 class="fw-bold">Phân công theo tổ</h5>
 <p class="text-muted small">Bảng phân công lọc theo Tổ KHXH hoặc Tổ KHTN</p>
 <div class="d-flex flex-wrap gap-2">
-<a href="#" class="btn btn-success btn-sm go-export" data-mode="to" data-to="khxh">Tổ KHXH</a>
-<a href="#" class="btn btn-success btn-sm go-export" data-mode="to" data-to="khtn">Tổ KHTN</a>
+<a href="<?= e(export_url(['mode'=>'to','to'=>'khxh','v'=>$vid])) ?>" class="btn btn-success btn-sm go-export" data-mode="to" data-to="khxh" target="_blank" rel="noopener">Tổ KHXH</a>
+<a href="<?= e(export_url(['mode'=>'to','to'=>'khtn','v'=>$vid])) ?>" class="btn btn-success btn-sm go-export" data-mode="to" data-to="khtn" target="_blank" rel="noopener">Tổ KHTN</a>
 </div>
 </div></div></div>
 
@@ -68,25 +74,29 @@ if ($mode === '') {
 <h5 class="fw-bold">Phân công cả trường</h5>
 <p class="text-muted small">Toàn bộ GV · có thể lọc THCS / THPT</p>
 <div class="d-flex flex-wrap gap-2">
-<a href="#" class="btn btn-warning btn-sm text-dark go-export" data-mode="all">Cả trường</a>
-<a href="#" class="btn btn-outline-warning btn-sm go-export" data-mode="all" data-level="THCS">THCS</a>
-<a href="#" class="btn btn-outline-warning btn-sm go-export" data-mode="all" data-level="THPT">THPT</a>
+<a href="<?= e(export_url(['mode'=>'all','v'=>$vid])) ?>" class="btn btn-warning btn-sm text-dark go-export" data-mode="all" target="_blank" rel="noopener">Cả trường</a>
+<a href="<?= e(export_url(['mode'=>'all','level'=>'THCS','v'=>$vid])) ?>" class="btn btn-outline-warning btn-sm go-export" data-mode="all" data-level="THCS" target="_blank" rel="noopener">THCS</a>
+<a href="<?= e(export_url(['mode'=>'all','level'=>'THPT','v'=>$vid])) ?>" class="btn btn-outline-warning btn-sm go-export" data-mode="all" data-level="THPT" target="_blank" rel="noopener">THPT</a>
 </div>
 </div></div></div>
 </div>
 
 <script>
-document.querySelectorAll('.go-export').forEach(function(a){
-  a.addEventListener('click', function(e){
-    e.preventDefault();
-    var v = document.getElementById('selVer').value;
-    var url = '<?= BASE_URL ?>xuat_bang.php?mode=' + encodeURIComponent(this.dataset.mode||'all')
-      + '&v=' + encodeURIComponent(v);
-    if (this.dataset.to) url += '&to=' + encodeURIComponent(this.dataset.to);
-    if (this.dataset.level) url += '&level=' + encodeURIComponent(this.dataset.level);
-    window.open(url, '_blank');
-  });
-});
+(function(){
+  var base = <?= json_encode(rtrim(BASE_URL, '/') . '/xuat_bang.php') ?>;
+  var sel = document.getElementById('selVer');
+  function rebuild() {
+    var v = sel ? sel.value : '';
+    document.querySelectorAll('.go-export').forEach(function(a){
+      var u = base + '?mode=' + encodeURIComponent(a.getAttribute('data-mode') || 'all') + '&v=' + encodeURIComponent(v);
+      if (a.getAttribute('data-to')) u += '&to=' + encodeURIComponent(a.getAttribute('data-to'));
+      if (a.getAttribute('data-level')) u += '&level=' + encodeURIComponent(a.getAttribute('data-level'));
+      a.setAttribute('href', u);
+    });
+  }
+  if (sel) sel.addEventListener('change', rebuild);
+  rebuild();
+})();
 </script>
 <?php require_once 'includes/footer.php'; exit;
 }
@@ -125,7 +135,6 @@ if ($mode === 'to') {
     }
 }
 
-// Format chuyên môn
 function cm_text($name) {
     $cm = get_teacher_chuyen_mon($name);
     return $cm ? implode(', ', $cm) : '';
@@ -137,11 +146,14 @@ function group_text($name) {
     if (!empty($f['khtn'])) $g[] = 'KHTN';
     return implode(', ', $g);
 }
+
+$back_url = export_url();
 ?>
 <!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= htmlspecialchars($mode==='gv' ? 'Danh sách giáo viên' : 'Bảng phân công') ?> – <?= htmlspecialchars($title_lan) ?></title>
 <style>
 @page { size: A4 landscape; margin: 10mm 12mm; }
@@ -149,6 +161,7 @@ function group_text($name) {
 body{font-family:'Times New Roman',Times,serif;font-size:12pt;color:#000;margin:0;padding:12px;background:#fff}
 .no-print{margin-bottom:14px;font-family:system-ui,sans-serif;font-size:14px}
 .no-print a,.no-print button{margin-right:8px}
+.no-print a{color:#1F4E79;text-decoration:none;font-weight:600}
 .no-print button{padding:6px 14px;cursor:pointer;background:#1F4E79;color:#fff;border:none;border-radius:6px}
 .header-table{width:100%;border:none;margin-bottom:6px}
 .header-table td{border:none;vertical-align:top;padding:0}
@@ -180,8 +193,8 @@ table.data td.center{text-align:center}
 <body>
 
 <div class="no-print">
-  <a href="<?= BASE_URL ?>xuat_bang.php">← Chọn loại xuất</a>
-  <button onclick="window.print()">🖨 In / Lưu PDF</button>
+  <a href="<?= htmlspecialchars($back_url) ?>">← Chọn loại xuất</a>
+  <button type="button" onclick="window.print()">🖨 In / Lưu PDF</button>
   <span style="color:#555">Phiên bản: <strong><?= htmlspecialchars($title_lan) ?></strong></span>
 </div>
 
@@ -241,7 +254,7 @@ table.data td.center{text-align:center}
 </tbody>
 </table>
 
-<?php else: /* phân công */ ?>
+<?php else: ?>
 
 <div class="main-title">
   <h1>BẢNG PHÂN CÔNG CHUYÊN MÔN</h1>
@@ -267,7 +280,6 @@ table.data td.center{text-align:center}
 <tbody>
 <?php $stt=0; foreach ($rows as $r):
   $stt++;
-  // Chỉ hiện người có phân công (hoặc vẫn hiện tất cả)
 ?>
 <tr>
   <td class="num"><?= $stt ?></td>
