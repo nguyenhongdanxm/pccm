@@ -27,6 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'thcs' => !empty($_POST['thcs']) || (empty($_POST['thcs']) && empty($_POST['thpt'])),
                 'thpt' => !empty($_POST['thpt']),
                 'tap_su' => !empty($_POST['tap_su']),
+                'hieu_truong' => !empty($_POST['hieu_truong']),
+                'pho_hieu_truong' => !empty($_POST['pho_hieu_truong']),
             ]);
             $cm = $_POST['chuyen_mon'] ?? [];
             if (!is_array($cm)) $cm = $cm ? [$cm] : [];
@@ -75,6 +77,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'thcs' => !empty($_POST['thcs']),
                 'thpt' => !empty($_POST['thpt']),
                 'tap_su' => !empty($_POST['tap_su']),
+                'hieu_truong' => !empty($_POST['hieu_truong']),
+                'pho_hieu_truong' => !empty($_POST['pho_hieu_truong']),
             ]);
             flash("Đã cập nhật: $name", 'success');
         }
@@ -96,6 +100,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'f_thcs' => $_POST['keep_f_thcs'] ?? '',
         'f_thpt' => $_POST['keep_f_thpt'] ?? '',
         'f_tap_su' => $_POST['keep_f_tap_su'] ?? '',
+        'f_ht' => $_POST['keep_f_ht'] ?? '',
+        'f_pht' => $_POST['keep_f_pht'] ?? '',
         'f_cm' => $_POST['keep_f_cm'] ?? '',
         'q' => $_POST['keep_q'] ?? '',
     ], fn($v) => $v !== '' && $v !== null);
@@ -114,9 +120,11 @@ $f_khtn = !empty($_GET['f_khtn']);
 $f_thcs = !empty($_GET['f_thcs']);
 $f_thpt = !empty($_GET['f_thpt']);
 $f_tap_su = !empty($_GET['f_tap_su']);
+$f_ht = !empty($_GET['f_ht']);
+$f_pht = !empty($_GET['f_pht']);
 $f_cm = trim($_GET['f_cm'] ?? '');
 
-$filtered = array_values(array_filter($teachers, function($t) use ($q_search, $f_khxh, $f_khtn, $f_thcs, $f_thpt, $f_tap_su, $f_cm) {
+$filtered = array_values(array_filter($teachers, function($t) use ($q_search, $f_khxh, $f_khtn, $f_thcs, $f_thpt, $f_tap_su, $f_ht, $f_pht, $f_cm) {
     if ($q_search && mb_stripos($t, $q_search) === false) return false;
     $f = get_teacher_flags($t);
     if ($f_khxh && !$f['khxh']) return false;
@@ -124,6 +132,8 @@ $filtered = array_values(array_filter($teachers, function($t) use ($q_search, $f
     if ($f_thcs && !$f['thcs']) return false;
     if ($f_thpt && !$f['thpt']) return false;
     if ($f_tap_su && !$f['tap_su']) return false;
+    if ($f_ht && empty($f['hieu_truong'])) return false;
+    if ($f_pht && empty($f['pho_hieu_truong'])) return false;
     if ($f_cm !== '') {
         $cm = $f['chuyen_mon'] ?? [];
         if (!in_array($f_cm, $cm, true)) return false;
@@ -136,6 +146,8 @@ $n_khtn = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['khtn'])
 $n_thcs = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['thcs']));
 $n_thpt = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['thpt']));
 $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']));
+$n_ht = count(array_filter($teachers, fn($t) => !empty(get_teacher_flags($t)['hieu_truong'])));
+$n_pht = count(array_filter($teachers, fn($t) => !empty(get_teacher_flags($t)['pho_hieu_truong'])));
 ?>
 
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
@@ -160,6 +172,15 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 </form>
 </div>
 
+<div class="alert alert-light border small mb-3">
+<strong>Quy ước định mức:</strong>
+THCS <?= number_format(get_quota_thcs(),0) ?>t ·
+THPT <?= number_format(get_quota_thpt(),0) ?>t ·
+Tập sự −<?= number_format(get_tap_su_reduction(),0) ?>t ·
+<strong class="text-danger">Hiệu trưởng <?= number_format(get_quota_hieu_truong(),0) ?>t</strong> ·
+<strong class="text-warning">Phó HT <?= number_format(get_quota_pho_hieu_truong(),0) ?>t</strong>
+</div>
+
 <div class="row g-2 mb-3">
 <div class="col"><div class="card stat-card py-2"><div class="number fs-5"><?= count($teachers) ?></div><div class="label">Tổng GV</div></div></div>
 <div class="col"><div class="card stat-card py-2"><div class="number fs-5"><?= $n_khxh ?></div><div class="label">Tổ KHXH</div></div></div>
@@ -167,6 +188,8 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 <div class="col"><div class="card stat-card py-2"><div class="number fs-5"><?= $n_thcs ?></div><div class="label">THCS</div></div></div>
 <div class="col"><div class="card stat-card py-2"><div class="number fs-5"><?= $n_thpt ?></div><div class="label">THPT</div></div></div>
 <div class="col"><div class="card stat-card py-2"><div class="number fs-5"><?= $n_tap ?></div><div class="label">Tập sự</div></div></div>
+<div class="col"><div class="card stat-card py-2"><div class="number fs-5"><?= $n_ht ?></div><div class="label">HT</div></div></div>
+<div class="col"><div class="card stat-card py-2"><div class="number fs-5"><?= $n_pht ?></div><div class="label">Phó HT</div></div></div>
 </div>
 
 <div class="row">
@@ -190,7 +213,9 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 <div class="form-check"><input class="form-check-input" type="checkbox" name="khtn" id="a_khtn" value="1"><label class="form-check-label" for="a_khtn">Tổ KHTN</label></div>
 <div class="form-check"><input class="form-check-input" type="checkbox" name="thcs" id="a_thcs" value="1" checked><label class="form-check-label" for="a_thcs">THCS</label></div>
 <div class="form-check"><input class="form-check-input" type="checkbox" name="thpt" id="a_thpt" value="1"><label class="form-check-label" for="a_thpt">THPT</label></div>
-<div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="tap_su" id="a_tap" value="1"><label class="form-check-label" for="a_tap">Tập sự</label></div>
+<div class="form-check"><input class="form-check-input" type="checkbox" name="tap_su" id="a_tap" value="1"><label class="form-check-label" for="a_tap">Tập sự (−<?= number_format(get_tap_su_reduction(),0) ?>t)</label></div>
+<div class="form-check"><input class="form-check-input" type="checkbox" name="hieu_truong" id="a_ht" value="1"><label class="form-check-label" for="a_ht">Hiệu trưởng (<?= number_format(get_quota_hieu_truong(),0) ?>t)</label></div>
+<div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="pho_hieu_truong" id="a_pht" value="1"><label class="form-check-label" for="a_pht">Phó hiệu trưởng (<?= number_format(get_quota_pho_hieu_truong(),0) ?>t)</label></div>
 <button type="submit" class="btn btn-primary btn-sm w-100">Thêm</button>
 </form>
 </div></div>
@@ -217,6 +242,8 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 <div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" name="f_thcs" value="1" id="fc" <?= $f_thcs?'checked':'' ?>><label class="form-check-label small" for="fc">THCS</label></div>
 <div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" name="f_thpt" value="1" id="fp" <?= $f_thpt?'checked':'' ?>><label class="form-check-label small" for="fp">THPT</label></div>
 <div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" name="f_tap_su" value="1" id="ft" <?= $f_tap_su?'checked':'' ?>><label class="form-check-label small" for="ft">Tập sự</label></div>
+<div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" name="f_ht" value="1" id="fht" <?= $f_ht?'checked':'' ?>><label class="form-check-label small" for="fht">HT</label></div>
+<div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" name="f_pht" value="1" id="fpht" <?= $f_pht?'checked':'' ?>><label class="form-check-label small" for="fpht">Phó HT</label></div>
 </div>
 <div class="col-auto">
 <button class="btn btn-sm btn-light text-dark">Lọc</button>
@@ -231,12 +258,14 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 <tr>
 <th class="text-start">#</th>
 <th class="text-start">Họ tên</th>
-<th class="text-start" style="min-width:160px">Chuyên môn</th>
+<th class="text-start" style="min-width:140px">Chuyên môn</th>
 <th title="Tổ Khoa học xã hội">KHXH</th>
 <th title="Tổ Khoa học tự nhiên">KHTN</th>
 <th>THCS</th>
 <th>THPT</th>
 <th>Tập sự</th>
+<th title="Hiệu trưởng — định mức <?= number_format(get_quota_hieu_truong(),0) ?> tiết/tuần">HT</th>
+<th title="Phó hiệu trưởng — định mức <?= number_format(get_quota_pho_hieu_truong(),0) ?> tiết/tuần">Phó HT</th>
 <th>ĐM</th>
 <th></th>
 </tr>
@@ -251,6 +280,8 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 <td class="text-start"><?= $i+1 ?></td>
 <td class="text-start">
 <strong><?= e($t) ?></strong>
+<?php if (!empty($f['hieu_truong'])): ?><span class="badge bg-danger ms-1">HT</span><?php endif; ?>
+<?php if (!empty($f['pho_hieu_truong'])): ?><span class="badge bg-warning text-dark ms-1">Phó HT</span><?php endif; ?>
 <div class="collapse mt-1" id="rn<?= $i ?>">
 <form method="post" class="input-group input-group-sm">
 <input type="hidden" name="action" value="rename">
@@ -271,7 +302,9 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 <?php if ($f_thcs): ?><input type="hidden" name="keep_f_thcs" value="1"><?php endif; ?>
 <?php if ($f_thpt): ?><input type="hidden" name="keep_f_thpt" value="1"><?php endif; ?>
 <?php if ($f_tap_su): ?><input type="hidden" name="keep_f_tap_su" value="1"><?php endif; ?>
-<select name="chuyen_mon[]" class="form-select form-select-sm" multiple size="3" style="min-width:140px"
+<?php if ($f_ht): ?><input type="hidden" name="keep_f_ht" value="1"><?php endif; ?>
+<?php if ($f_pht): ?><input type="hidden" name="keep_f_pht" value="1"><?php endif; ?>
+<select name="chuyen_mon[]" class="form-select form-select-sm" multiple size="3" style="min-width:130px"
   onchange="document.getElementById('cm<?= $i ?>').submit()" title="Ctrl+click chọn nhiều">
 <?php foreach ($subject_names as $s): ?>
 <option value="<?= e($s) ?>" <?= in_array($s, $cm, true)?'selected':'' ?>><?= e($s) ?></option>
@@ -284,7 +317,7 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 <span class="text-muted small">Chưa chọn</span>
 <?php endif; ?>
 </td>
-<td colspan="5" class="p-1">
+<td colspan="7" class="p-1">
 <form method="post" id="flag<?= $i ?>" class="d-contents">
 <input type="hidden" name="action" value="set_flags">
 <input type="hidden" name="name" value="<?= e($t) ?>">
@@ -295,6 +328,8 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 <?php if ($f_thcs): ?><input type="hidden" name="keep_f_thcs" value="1"><?php endif; ?>
 <?php if ($f_thpt): ?><input type="hidden" name="keep_f_thpt" value="1"><?php endif; ?>
 <?php if ($f_tap_su): ?><input type="hidden" name="keep_f_tap_su" value="1"><?php endif; ?>
+<?php if ($f_ht): ?><input type="hidden" name="keep_f_ht" value="1"><?php endif; ?>
+<?php if ($f_pht): ?><input type="hidden" name="keep_f_pht" value="1"><?php endif; ?>
 </form>
 <div class="d-flex justify-content-around">
 <input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="khxh" value="1" <?= $f['khxh']?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()">
@@ -302,9 +337,19 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 <input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="thcs" value="1" <?= $f['thcs']?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()">
 <input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="thpt" value="1" <?= $f['thpt']?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()">
 <input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="tap_su" value="1" <?= $f['tap_su']?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()">
+<input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="hieu_truong" value="1" <?= !empty($f['hieu_truong'])?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()" title="Hiệu trưởng — <?= number_format(get_quota_hieu_truong(),0) ?> tiết/tuần">
+<input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="pho_hieu_truong" value="1" <?= !empty($f['pho_hieu_truong'])?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()" title="Phó hiệu trưởng — <?= number_format(get_quota_pho_hieu_truong(),0) ?> tiết/tuần">
 </div>
 </td>
-<td><span class="badge bg-secondary"><?= number_format($quota,0) ?>t</span></td>
+<td>
+<?php if (!empty($f['hieu_truong'])): ?>
+<span class="badge bg-danger"><?= number_format($quota,0) ?>t</span>
+<?php elseif (!empty($f['pho_hieu_truong'])): ?>
+<span class="badge bg-warning text-dark"><?= number_format($quota,0) ?>t</span>
+<?php else: ?>
+<span class="badge bg-secondary"><?= number_format($quota,0) ?>t</span>
+<?php endif; ?>
+</td>
 <td class="text-nowrap">
 <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#rn<?= $i ?>"><i class="bi bi-pencil"></i></button>
 <form method="post" class="d-inline" onsubmit="return confirm('Xóa?')">
@@ -316,13 +361,15 @@ $n_tap = count(array_filter($teachers, fn($t) => get_teacher_flags($t)['tap_su']
 </tr>
 <?php endforeach; ?>
 <?php if (!$filtered): ?>
-<tr><td colspan="10" class="text-muted py-3">Không có giáo viên phù hợp.</td></tr>
+<tr><td colspan="12" class="text-muted py-3">Không có giáo viên phù hợp.</td></tr>
 <?php endif; ?>
 </tbody>
 </table>
 </div>
 <div class="card-footer small text-muted">
-Hiển thị <?= count($filtered) ?>/<?= count($teachers) ?> · Chuyên môn lấy từ danh mục Môn học · Giữ Ctrl để chọn nhiều môn
+Hiển thị <?= count($filtered) ?>/<?= count($teachers) ?> ·
+HT = <?= number_format(get_quota_hieu_truong(),0) ?> tiết/tuần · Phó HT = <?= number_format(get_quota_pho_hieu_truong(),0) ?> tiết/tuần ·
+HT ưu tiên hơn Phó HT nếu chọn cả hai
 </div>
 </div></div>
 </div></div>
