@@ -2,7 +2,13 @@
 $page_title = 'Kết quả phân công';
 require_once 'includes/functions.php';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && is_logged_in()) {
+// Khách chưa đăng nhập → trang tra cứu gọn
+if (!is_logged_in()) {
+    header('Location: ' . BASE_URL . 'tracuu.php');
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'create') {
@@ -84,12 +90,13 @@ $total_role = array_sum(array_column($loads, 'role'));
         <a href="<?= BASE_URL ?>thongke.php?v=<?= e($view_id) ?>" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-bar-chart-line"></i> Thống kê
         </a>
+        <a href="<?= BASE_URL ?>tracuu.php?v=<?= e($view_id) ?>" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-search"></i> Tra cứu GV
+        </a>
         <?php endif; ?>
-        <?php if (is_logged_in()): ?>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCreate">
             <i class="bi bi-plus-lg"></i> Tạo phiên bản mới
         </button>
-        <?php endif; ?>
     </div>
 </div>
 
@@ -117,14 +124,14 @@ $total_role = array_sum(array_column($loads, 'role'));
     <td class="text-nowrap">
         <a href="<?= BASE_URL ?>ketqua.php?v=<?= e($v['id']) ?>" class="btn btn-outline-primary btn-sm">Xem</a>
         <a href="<?= BASE_URL ?>thongke.php?v=<?= e($v['id']) ?>" class="btn btn-outline-secondary btn-sm" title="Thống kê"><i class="bi bi-bar-chart-line"></i></a>
-        <?php if (is_logged_in() && $v['id'] !== $active_id): ?>
+        <?php if ($v['id'] !== $active_id): ?>
         <form method="post" class="d-inline">
             <input type="hidden" name="action" value="activate">
             <input type="hidden" name="id" value="<?= e($v['id']) ?>">
             <button class="btn btn-outline-success btn-sm">Chọn làm việc</button>
         </form>
         <?php endif; ?>
-        <?php if (is_logged_in() && count($versions) > 1): ?>
+        <?php if (count($versions) > 1): ?>
         <form method="post" class="d-inline" onsubmit="return confirm('Xóa phiên bản này? Dữ liệu phân công sẽ mất.')">
             <input type="hidden" name="action" value="delete">
             <input type="hidden" name="id" value="<?= e($v['id']) ?>">
@@ -220,14 +227,11 @@ $total_role = array_sum(array_column($loads, 'role'));
 </div>
 <?php else: ?>
 <div class="alert alert-info">Phiên bản này chưa có dữ liệu phân công.
-<?php if (is_logged_in() && $view_id === $active_id): ?>
  <a href="<?= BASE_URL ?>them.php">Thêm phân công</a>
-<?php endif; ?>
 </div>
 <?php endif; ?>
 <?php endif; ?>
 
-<?php if (is_logged_in()): ?>
 <div class="modal fade" id="modalCreate" tabindex="-1">
 <div class="modal-dialog">
 <form method="post" class="modal-content">
@@ -265,6 +269,5 @@ $total_role = array_sum(array_column($loads, 'role'));
 </div>
 </form>
 </div></div>
-<?php endif; ?>
 
 <?php require_once 'includes/footer.php'; ?>
