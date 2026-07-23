@@ -10,6 +10,7 @@ define('TEACHER_META_FILE', DATA_PATH . '/teacher_meta.json');
 define('GROUPS_FILE', DATA_PATH . '/groups.json');
 define('SETTINGS_FILE', DATA_PATH . '/settings.json');
 define('SUBJECTS_FILE', DATA_PATH . '/subjects.json');
+define('SUBJECT_META_FILE', DATA_PATH . '/subject_meta.json');
 define('CLASSES_FILE', DATA_PATH . '/classes.json');
 define('ROLES_FILE', DATA_PATH . '/roles.json');
 define('VERSIONS_FILE', DATA_PATH . '/versions.json');
@@ -18,7 +19,6 @@ define('ACTIVE_VERSION_FILE', DATA_PATH . '/active_version.json');
 define('LEGACY_ASSIGNMENTS_FILE', DATA_PATH . '/assignments.json');
 define('LEGACY_ROLE_ASSIGNMENTS_FILE', DATA_PATH . '/role_assignments.json');
 
-// Mặc định (có thể sửa trong Quản lý GV)
 define('DEFAULT_QUOTA_THCS', 17);
 define('DEFAULT_QUOTA_THPT', 15);
 
