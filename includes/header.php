@@ -85,9 +85,7 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
 <li class="nav-item"><a class="nav-link <?= $current=='index'?'active':'' ?>" href="<?= BASE_URL ?>index.php"><i class="bi bi-house"></i> Tổng quan</a></li>
 <li class="nav-item"><a class="nav-link <?= in_array($current,['them','doicheo','rasoat'])?'active':'' ?>" href="<?= BASE_URL ?>them.php"><i class="bi bi-clipboard-check"></i> Phân công</a></li>
 <li class="nav-item"><a class="nav-link <?= $current=='danhsach'?'active':'' ?>" href="<?= BASE_URL ?>danhsach.php"><i class="bi bi-list-ul"></i> Danh sách</a></li>
-<?php endif; ?>
 <li class="nav-item"><a class="nav-link <?= in_array($current,['ketqua','baocao','thongke'],true)?'active':'' ?>" href="<?= BASE_URL ?>ketqua.php"><i class="bi bi-clipboard-data"></i> Kết quả</a></li>
-<?php if ($logged): ?>
 <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-gear"></i> Quản lý</a>
 <ul class="dropdown-menu">
 <li><a class="dropdown-item" href="<?= BASE_URL ?>giaovien.php">Giáo viên</a></li>
@@ -96,6 +94,8 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
 <li><hr class="dropdown-divider"></li>
 <li><a class="dropdown-item" href="<?= BASE_URL ?>kiemnhiem.php">Chức vụ kiêm nhiệm & Số tiết</a></li>
 </ul></li>
+<?php else: ?>
+<li class="nav-item"><a class="nav-link <?= $current=='tracuu'?'active':'' ?>" href="<?= BASE_URL ?>tracuu.php"><i class="bi bi-search"></i> Tra cứu phân công</a></li>
 <?php endif; ?>
 </ul>
 <?php if ($logged): ?>
