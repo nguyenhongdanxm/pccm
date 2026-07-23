@@ -3,27 +3,7 @@ $page_title = 'Quản lý Môn học';
 require_once 'includes/functions.php';
 require_login();
 
-/** Môn THPT nhập theo từng lớp (10A, 10B…) */
-function subjects_per_class() {
-    return [
-        'CĐ Lịch sử', 'Địa lí', 'Địa lý', 'CĐ Địa lí', 'CĐ Địa lý',
-        'Sinh học', 'CĐ Sinh', 'CĐ Sinh học',
-        'GD&KTPL', 'GDKT&PL', 'GD KT&PL',
-        'Vật lí', 'CĐ Vật lí', 'CĐ Lí',
-        'Hóa học', 'Hoá học', 'CĐ Hoá', 'CĐ Hóa', 'CĐ Hoá học', 'CĐ Hóa học',
-        'Tin học', 'Âm nhạc', 'Mỹ thuật', 'Mỹ Thuật',
-    ];
-}
-
-function is_per_class_subject($name) {
-    $n = mb_strtolower(trim($name), 'UTF-8');
-    foreach (subjects_per_class() as $s) {
-        if (mb_strtolower(trim($s), 'UTF-8') === $n) return true;
-    }
-    return false;
-}
-
-/** Khóa cột THCS */
+/** Khóa cột THCS — theo khối */
 function keys_thcs() {
     $k = [];
     foreach (['6', '7', '8', '9'] as $g) {
@@ -32,21 +12,17 @@ function keys_thcs() {
     return $k;
 }
 
-/** Khóa cột THPT (theo môn) */
-function keys_thpt($subject_name) {
+/** Khóa cột THPT — tất cả theo từng lớp */
+function keys_thpt() {
     $k = [];
-    if (is_per_class_subject($subject_name)) {
-        $classes = get_classes();
-        $thpt = [];
-        foreach ($classes as $c) {
-            if (intval(get_grade($c)) >= 10) $thpt[] = $c;
-        }
-        if (!$thpt) $thpt = ['10A', '10B', '11A', '11B', '12A', '12B'];
-        foreach ($thpt as $c) $k[] = ['key' => $c, 'label' => $c];
-    } else {
-        foreach (['10', '11', '12'] as $g) {
-            $k[] = ['key' => $g, 'label' => 'Khối ' . $g];
-        }
+    $classes = get_classes();
+    $thpt = [];
+    foreach ($classes as $c) {
+        if (intval(get_grade($c)) >= 10) $thpt[] = $c;
+    }
+    if (!$thpt) $thpt = ['10A', '10B', '11A', '11B', '12A', '12B'];
+    foreach ($thpt as $c) {
+        $k[] = ['key' => $c, 'label' => $c];
     }
     return $k;
 }
@@ -55,7 +31,7 @@ function period_val($data, $key) {
     if (isset($data[$key]) && $data[$key] !== '' && $data[$key] !== null) {
         return $data[$key];
     }
-    // fallback khối cho lớp (10A ← 10)
+    // fallback khối cho lớp (10A ← 10) — dữ liệu cũ
     $g = preg_replace('/[^0-9]/', '', $key);
     if ($g !== '' && isset($data[$g]) && $data[$g] !== '' && $data[$g] !== null) {
         return $data[$g];
@@ -74,38 +50,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'update') {
         $subject = $_POST['subject'] ?? '';
-        $level = $_POST['level'] ?? ''; // thcs | thpt | all
+        $level = $_POST['level'] ?? '';
         if (isset($subjects[$subject])) {
             $existing = $subjects[$subject];
             if (!is_array($existing)) $existing = [];
 
-            // Giữ nguyên phần không thuộc level đang sửa
+            // Giữ phần không thuộc level đang sửa
             $keep = [];
             foreach ($existing as $k => $v) {
                 $g = intval(preg_replace('/[^0-9]/', '', (string)$k));
-                $is_thcs = ($g >= 6 && $g <= 9 && !preg_match('/[A-Za-z]/', (string)$k));
-                // key "6"-"9" = THCS; key "10"+ hoặc "10A" = THPT
                 $is_thpt_key = ($g >= 10) || (preg_match('/^(10|11|12)[A-Za-z]/', (string)$k));
                 if ($level === 'thcs' && $is_thpt_key) $keep[$k] = $v;
                 elseif ($level === 'thpt' && !$is_thpt_key && $g >= 6 && $g <= 9) $keep[$k] = $v;
-                elseif ($level === 'all') { /* replace all below */ }
-                else {
-                    // thcs level: keep non-thcs; thpt: keep non-thpt already handled
-                    if ($level === 'thcs' && !$is_thcs && !$is_thpt_key) $keep[$k] = $v;
-                }
             }
 
             $new = $keep;
             $checked = $_POST['on'] ?? [];
             if (!is_array($checked)) $checked = [];
 
-            $keys = [];
-            if ($level === 'thcs' || $level === 'all') $keys = array_merge($keys, keys_thcs());
-            if ($level === 'thpt' || $level === 'all') $keys = array_merge($keys, keys_thpt($subject));
+            $keys = ($level === 'thcs') ? keys_thcs() : keys_thpt();
 
             foreach ($keys as $ik) {
                 $k = $ik['key'];
-                // Chỉ lưu khi được tích
                 if (!in_array($k, $checked, true)) {
                     unset($new[$k]);
                     continue;
@@ -114,8 +80,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($val !== '' && is_numeric($val) && floatval($val) > 0) {
                     $new[$k] = floatval($val);
                 } else {
-                    // tích nhưng chưa nhập → mặc định 1 để đánh dấu có dạy
                     $new[$k] = ($val !== '' && is_numeric($val)) ? floatval($val) : 1;
+                }
+            }
+
+            // Khi lưu THPT theo lớp: bỏ khóa khối cũ 10/11/12 nếu đã có dữ liệu lớp
+            if ($level === 'thpt') {
+                foreach (['10', '11', '12'] as $og) {
+                    unset($new[$og]);
                 }
             }
 
@@ -165,12 +137,18 @@ function render_grade_row($subject, $data, $keys, $level, $tab) {
   <input type="hidden" name="level" value="<?= e($level) ?>">
   <input type="hidden" name="tab" value="<?= e($tab) ?>">
   <div class="d-flex flex-wrap gap-2 align-items-end">
-    <?php foreach ($keys as $ik):
+    <?php
+    $prev_g = '';
+    foreach ($keys as $ik):
       $k = $ik['key'];
       $active = is_key_active($data, $k);
       $val = period_val($data, $k);
       $id = 'c_' . $uid . '_' . preg_replace('/[^a-zA-Z0-9]/', '', $k);
+      $g = get_grade($k);
+      if ($level === 'thpt' && $g !== $prev_g && $prev_g !== ''):
     ?>
+    <div class="grade-sep" title="Khối <?= e($g) ?>"></div>
+    <?php endif; $prev_g = $g; ?>
     <div class="grade-cell <?= $active ? 'is-on' : '' ?>" data-cell>
       <div class="form-check mb-1 text-center">
         <input class="form-check-input grade-check" type="checkbox" name="on[]" value="<?= e($k) ?>"
@@ -205,6 +183,7 @@ function render_grade_row($subject, $data, $keys, $level, $tab) {
 .grade-cell .period-input:disabled{background:#eee;opacity:.55}
 .grade-cell .form-check-input{margin:0 auto .15rem;float:none;display:block}
 .grade-cell .form-check-label{cursor:pointer;font-size:.8rem}
+.grade-sep{width:1px;align-self:stretch;background:#ced4da;margin:0 .25rem}
 .subject-row{
   background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.06);
   padding:1rem 1.1rem;margin-bottom:.75rem
@@ -218,7 +197,6 @@ function render_grade_row($subject, $data, $keys, $level, $tab) {
   background:#1F4E79!important;color:#fff!important;border-color:#1F4E79!important
 }
 .hint{font-size:.88rem;color:#6c757d}
-.badge-per{font-size:.7rem}
 </style>
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
@@ -233,18 +211,18 @@ function render_grade_row($subject, $data, $keys, $level, $tab) {
   </li>
   <li class="nav-item">
     <a class="nav-link <?= $tab==='thpt'?'active':'' ?>" href="<?= BASE_URL ?>monhoc.php?tab=thpt">
-      <i class="bi bi-building"></i> THPT <span class="badge bg-light text-dark">khối 10–12</span>
+      <i class="bi bi-building"></i> THPT <span class="badge bg-light text-dark">theo lớp</span>
     </a>
   </li>
 </ul>
 
 <div class="hint mb-3">
   <i class="bi bi-info-circle"></i>
-  <strong>Tích khối</strong> = môn được dạy ở khối/lớp đó ·
-  Nhập <strong>số tiết</strong> bên dưới ·
-  Bỏ tích = không dạy (không tính trong phân công & thống kê).
+  <strong>Tích</strong> = môn dạy ở khối/lớp đó · Nhập <strong>số tiết</strong> bên dưới · Bỏ tích = không dạy.
   <?php if ($tab === 'thpt'): ?>
-  <br>Một số môn (CĐ, Vật lí, Hoá…) nhập theo <strong>từng lớp</strong> 10A, 10B…
+  <br><strong>THPT:</strong> tất cả môn nhập theo <em>từng lớp</em> (10A, 10B, 11A, 11B, 12A, 12B).
+  <?php else: ?>
+  <br><strong>THCS:</strong> nhập theo <em>khối</em> (6, 7, 8, 9).
   <?php endif; ?>
 </div>
 
@@ -266,7 +244,7 @@ function render_grade_row($subject, $data, $keys, $level, $tab) {
 
 <?php if ($tab === 'thcs'): ?>
 
-<div class="mb-2 text-muted small fw-semibold text-uppercase">Cấp THCS — tích khối & số tiết</div>
+<div class="mb-2 text-muted small fw-semibold text-uppercase">THCS — tích khối & số tiết</div>
 
 <?php foreach ($subjects as $subject => $data):
   $keys = keys_thcs();
@@ -285,20 +263,17 @@ function render_grade_row($subject, $data, $keys, $level, $tab) {
 </div>
 <?php endforeach; ?>
 
-<?php else: /* THPT */ ?>
+<?php else: ?>
 
-<div class="mb-2 text-muted small fw-semibold text-uppercase">Cấp THPT — tích khối/lớp & số tiết</div>
+<div class="mb-2 text-muted small fw-semibold text-uppercase">THPT — tích từng lớp & số tiết (10A · 10B · 11A · 11B · 12A · 12B)</div>
 
-<?php foreach ($subjects as $subject => $data):
-  $keys = keys_thpt($subject);
-  $per = is_per_class_subject($subject);
+<?php
+$keys = keys_thpt();
+foreach ($subjects as $subject => $data):
 ?>
 <div class="subject-row">
   <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
-    <div class="sub-name">
-      <?= e($subject) ?>
-      <?php if ($per): ?><span class="badge bg-primary badge-per ms-1">theo lớp</span><?php endif; ?>
-    </div>
+    <div class="sub-name"><?= e($subject) ?></div>
     <form method="post" onsubmit="return confirm('Xóa môn này?')">
       <input type="hidden" name="action" value="delete">
       <input type="hidden" name="name" value="<?= e($subject) ?>">
