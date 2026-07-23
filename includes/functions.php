@@ -1,6 +1,5 @@
 <?php
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/subject_meta.php';
 
 define('ADMIN_USER', 'admin');
 define('ADMIN_PASS', 'Xinman@2021');
@@ -124,6 +123,8 @@ function get_classes() { global $DEFAULT_CLASSES; return load_json(CLASSES_FILE,
 function get_roles() { global $DEFAULT_ROLES; return load_json(ROLES_FILE, $DEFAULT_ROLES); }
 function get_groups() { global $DEFAULT_GROUPS; return load_json(GROUPS_FILE, $DEFAULT_GROUPS); }
 function save_groups($g) { save_json(GROUPS_FILE, $g); }
+
+require_once __DIR__ . '/subject_meta.php';
 
 function get_teacher_meta() { return load_json(TEACHER_META_FILE, []); }
 function save_teacher_meta($meta) { save_json(TEACHER_META_FILE, $meta); }
@@ -350,12 +351,10 @@ function resolve_std_period($grades_data, $class_name) {
 function get_periods($subject, $class_name) {
     $subjects = get_subjects();
     if (!isset($subjects[$subject])) return null;
-    // Tôn trọng ẩn theo cấp
     $level = (intval(get_grade($class_name)) >= 10) ? 'thpt' : 'thcs';
     if (!is_subject_visible_for_level($subject, $level)) return null;
     $v = resolve_std_period($subjects[$subject], $class_name);
-    if ($v === null) return null;
-    if ($v <= 0) return null;
+    if ($v === null || $v <= 0) return null;
     return $v;
 }
 
@@ -459,26 +458,13 @@ function get_assignment_stats($vid = null) {
         if ($status === 'ok') $classes_ok++;
 
         $by_class[] = [
-            'class' => $cls,
-            'grade' => $grade,
-            'level' => $level,
-            'std' => $std,
-            'assigned' => $assigned,
-            'diff' => $diff,
-            'missing' => $miss,
-            'period_diffs' => $pdiffs,
-            'status' => $status,
+            'class' => $cls, 'grade' => $grade, 'level' => $level,
+            'std' => $std, 'assigned' => $assigned, 'diff' => $diff,
+            'missing' => $miss, 'period_diffs' => $pdiffs, 'status' => $status,
         ];
 
         if (!isset($by_grade[$grade])) {
-            $by_grade[$grade] = [
-                'level' => $level,
-                'class_count' => 0,
-                'std' => 0,
-                'assigned' => 0,
-                'std_per_class' => 0,
-                'classes_ok' => 0,
-            ];
+            $by_grade[$grade] = ['level'=>$level,'class_count'=>0,'std'=>0,'assigned'=>0,'std_per_class'=>0,'classes_ok'=>0];
         }
         $by_grade[$grade]['class_count']++;
         $by_grade[$grade]['std'] += $std;
@@ -504,22 +490,13 @@ function get_assignment_stats($vid = null) {
     ksort($by_grade, SORT_NUMERIC);
 
     return [
-        'total_assigned' => $total_day,
-        'total_std' => $total_std,
-        'total_diff' => $total_day - $total_std,
-        'total_role' => $total_role,
-        'slots_ok' => $slots_ok,
-        'slots_missing' => $slots_missing,
-        'slots_diff' => $slots_diff,
-        'slots_conflict' => count($conflict_list),
-        'classes_ok' => $classes_ok,
-        'classes_total' => count($classes),
-        'by_class' => $by_class,
-        'by_grade' => $by_grade,
-        'by_subject' => $by_subject,
-        'missing_list' => $missing_list,
-        'diff_list' => $diff_list,
-        'conflict_list' => $conflict_list,
+        'total_assigned' => $total_day, 'total_std' => $total_std,
+        'total_diff' => $total_day - $total_std, 'total_role' => $total_role,
+        'slots_ok' => $slots_ok, 'slots_missing' => $slots_missing,
+        'slots_diff' => $slots_diff, 'slots_conflict' => count($conflict_list),
+        'classes_ok' => $classes_ok, 'classes_total' => count($classes),
+        'by_class' => $by_class, 'by_grade' => $by_grade, 'by_subject' => $by_subject,
+        'missing_list' => $missing_list, 'diff_list' => $diff_list, 'conflict_list' => $conflict_list,
     ];
 }
 
