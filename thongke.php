@@ -1,6 +1,7 @@
 <?php
 $page_title = 'Thống kê phân công';
 require_once 'includes/functions.php';
+require_login();
 
 $view_id = $_GET['v'] ?? get_active_version_id();
 if (!get_version($view_id)) {
@@ -77,7 +78,6 @@ $cov = $s['total_std'] > 0 ? round($s['total_assigned'] / $s['total_std'] * 100,
 
 <div class="tab-content">
 
-<!-- THEO LỚP -->
 <div class="tab-pane fade show active" id="tabClass">
 <div class="card">
 <div class="card-header d-flex justify-content-between align-items-center">
@@ -120,11 +120,10 @@ $cov = $s['total_std'] > 0 ? round($s['total_assigned'] / $s['total_std'] * 100,
 </tbody>
 </table>
 </div></div>
-<div class="card-footer small text-muted">Chuẩn = tổng số tiết các môn có phân bố cho khối của lớp (theo danh mục Môn học).</div>
+<div class="card-footer small text-muted">Chuẩn = tổng số tiết các môn có phân bố cho khối/lớp (theo danh mục Môn học).</div>
 </div>
 </div>
 
-<!-- THEO KHỐI -->
 <div class="tab-pane fade" id="tabGrade">
 <div class="card">
 <div class="card-header"><i class="bi bi-layers"></i> Tổng hợp theo khối</div>
@@ -162,7 +161,6 @@ $cov = $s['total_std'] > 0 ? round($s['total_assigned'] / $s['total_std'] * 100,
 </div></div>
 </div>
 
-<!-- THEO MÔN -->
 <div class="tab-pane fade" id="tabSubject">
 <div class="card">
 <div class="card-header d-flex justify-content-between align-items-center">
@@ -201,7 +199,6 @@ $cov = $s['total_std'] > 0 ? round($s['total_assigned'] / $s['total_std'] * 100,
 </div></div>
 </div>
 
-<!-- THIẾU / LỆCH -->
 <div class="tab-pane fade" id="tabMissing">
 <div class="row g-3">
   <div class="col-lg-6">
@@ -267,7 +264,7 @@ $cov = $s['total_std'] > 0 ? round($s['total_assigned'] / $s['total_std'] * 100,
 <?php endif; ?>
 </div>
 
-</div><!-- tab-content -->
+</div>
 
 <script>
 function bindFilter(inputId, tableId) {
