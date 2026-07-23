@@ -86,7 +86,7 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
 <li class="nav-item"><a class="nav-link <?= in_array($current,['them','doicheo','rasoat'])?'active':'' ?>" href="<?= BASE_URL ?>them.php"><i class="bi bi-clipboard-check"></i> Phân công</a></li>
 <li class="nav-item"><a class="nav-link <?= $current=='danhsach'?'active':'' ?>" href="<?= BASE_URL ?>danhsach.php"><i class="bi bi-list-ul"></i> Danh sách</a></li>
 <?php endif; ?>
-<li class="nav-item"><a class="nav-link <?= ($current=='ketqua'||$current=='baocao')?'active':'' ?>" href="<?= BASE_URL ?>ketqua.php"><i class="bi bi-clipboard-data"></i> Kết quả</a></li>
+<li class="nav-item"><a class="nav-link <?= in_array($current,['ketqua','baocao','thongke'],true)?'active':'' ?>" href="<?= BASE_URL ?>ketqua.php"><i class="bi bi-clipboard-data"></i> Kết quả</a></li>
 <?php if ($logged): ?>
 <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-gear"></i> Quản lý</a>
 <ul class="dropdown-menu">
