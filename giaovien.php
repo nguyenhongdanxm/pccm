@@ -1,11 +1,27 @@
 <?php
 $page_title = 'Quản lý Giáo viên';
 require_once 'includes/functions.php';
+require_once 'includes/csdl_teacher_sync.php';
 require_login();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     $teachers = get_teachers();
+
+    if ($action === 'sync_csdl') {
+        $r = sync_pccm_teachers_from_csdl(true);
+        if (!empty($r['error'])) {
+            flash($r['error'], 'danger');
+        } else {
+            flash(
+                'Đã đồng bộ từ CSDL: cập nhật ' . $r['updated']
+                . ' · thêm mới ' . $r['added']
+                . ' (không đụng phân công). Nguồn: ' . ($r['path'] ?: '—'),
+                'success'
+            );
+        }
+        header('Location: ' . BASE_URL . 'giaovien.php'); exit;
+    }
 
     if ($action === 'save_quota') {
         $s = get_settings();
@@ -113,6 +129,7 @@ require_once 'includes/header.php';
 $teachers = get_teachers_sorted();
 $subject_names = array_keys(get_subjects());
 sort($subject_names);
+$csdlPath = pccm_csdl_teachers_path();
 
 $q_search = trim($_GET['q'] ?? '');
 $f_khxh = !empty($_GET['f_khxh']);
@@ -152,6 +169,13 @@ $n_pht = count(array_filter($teachers, fn($t) => !empty(get_teacher_flags($t)['p
 
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
 <h3 class="mb-0"><i class="bi bi-people"></i> Quản lý Giáo viên</h3>
+<div class="d-flex flex-wrap gap-2 align-items-end">
+<form method="post" onsubmit="return confirm('Đồng bộ Tổ / Chức vụ / Cấp / chuyên môn từ CSDL?\n\nKhông xóa GV, không đụng phân công.');">
+<input type="hidden" name="action" value="sync_csdl">
+<button type="submit" class="btn btn-success btn-sm" <?= $csdlPath ? '' : 'disabled title="Không thấy file CSDL teachers.json"' ?>>
+  <i class="bi bi-cloud-download"></i> Đồng bộ từ CSDL
+</button>
+</form>
 <form method="post" class="d-flex flex-wrap align-items-end gap-2 border rounded px-3 py-2 bg-white shadow-sm">
 <input type="hidden" name="action" value="save_quota">
 <div>
@@ -171,6 +195,7 @@ $n_pht = count(array_filter($teachers, fn($t) => !empty(get_teacher_flags($t)['p
 <button type="submit" class="btn btn-primary btn-sm">Lưu định mức</button>
 </form>
 </div>
+</div>
 
 <div class="alert alert-light border small mb-3">
 <strong>Quy ước định mức:</strong>
@@ -179,6 +204,8 @@ THPT <?= number_format(get_quota_thpt(),0) ?>t ·
 Tập sự −<?= number_format(get_tap_su_reduction(),0) ?>t ·
 <strong class="text-danger">Hiệu trưởng <?= number_format(get_quota_hieu_truong(),0) ?>t</strong> ·
 <strong class="text-warning">Phó HT <?= number_format(get_quota_pho_hieu_truong(),0) ?>t</strong>
+· Cột <em>Tổ / Chức vụ / Cấp</em> lấy từ <strong>CSDL</strong> (nút Đồng bộ).
+<?php if ($csdlPath): ?><span class="text-success">· Đã nối CSDL</span><?php else: ?><span class="text-danger">· Chưa thấy CSDL teachers.json</span><?php endif; ?>
 </div>
 
 <div class="row g-2 mb-3">
@@ -207,15 +234,14 @@ Tập sự −<?= number_format(get_tap_su_reduction(),0) ?>t ·
 <option value="<?= e($s) ?>"><?= e($s) ?></option>
 <?php endforeach; ?>
 </select>
-<div class="form-text">Giữ Ctrl để chọn nhiều môn</div>
 </div>
 <div class="form-check"><input class="form-check-input" type="checkbox" name="khxh" id="a_khxh" value="1"><label class="form-check-label" for="a_khxh">Tổ KHXH</label></div>
 <div class="form-check"><input class="form-check-input" type="checkbox" name="khtn" id="a_khtn" value="1"><label class="form-check-label" for="a_khtn">Tổ KHTN</label></div>
 <div class="form-check"><input class="form-check-input" type="checkbox" name="thcs" id="a_thcs" value="1" checked><label class="form-check-label" for="a_thcs">THCS</label></div>
 <div class="form-check"><input class="form-check-input" type="checkbox" name="thpt" id="a_thpt" value="1"><label class="form-check-label" for="a_thpt">THPT</label></div>
-<div class="form-check"><input class="form-check-input" type="checkbox" name="tap_su" id="a_tap" value="1"><label class="form-check-label" for="a_tap">Tập sự (−<?= number_format(get_tap_su_reduction(),0) ?>t)</label></div>
-<div class="form-check"><input class="form-check-input" type="checkbox" name="hieu_truong" id="a_ht" value="1"><label class="form-check-label" for="a_ht">Hiệu trưởng (<?= number_format(get_quota_hieu_truong(),0) ?>t)</label></div>
-<div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="pho_hieu_truong" id="a_pht" value="1"><label class="form-check-label" for="a_pht">Phó hiệu trưởng (<?= number_format(get_quota_pho_hieu_truong(),0) ?>t)</label></div>
+<div class="form-check"><input class="form-check-input" type="checkbox" name="tap_su" id="a_tap" value="1"><label class="form-check-label" for="a_tap">Tập sự</label></div>
+<div class="form-check"><input class="form-check-input" type="checkbox" name="hieu_truong" id="a_ht" value="1"><label class="form-check-label" for="a_ht">Hiệu trưởng</label></div>
+<div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="pho_hieu_truong" id="a_pht" value="1"><label class="form-check-label" for="a_pht">Phó hiệu trưởng</label></div>
 <button type="submit" class="btn btn-primary btn-sm w-100">Thêm</button>
 </form>
 </div></div>
@@ -242,8 +268,6 @@ Tập sự −<?= number_format(get_tap_su_reduction(),0) ?>t ·
 <div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" name="f_thcs" value="1" id="fc" <?= $f_thcs?'checked':'' ?>><label class="form-check-label small" for="fc">THCS</label></div>
 <div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" name="f_thpt" value="1" id="fp" <?= $f_thpt?'checked':'' ?>><label class="form-check-label small" for="fp">THPT</label></div>
 <div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" name="f_tap_su" value="1" id="ft" <?= $f_tap_su?'checked':'' ?>><label class="form-check-label small" for="ft">Tập sự</label></div>
-<div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" name="f_ht" value="1" id="fht" <?= $f_ht?'checked':'' ?>><label class="form-check-label small" for="fht">HT</label></div>
-<div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" name="f_pht" value="1" id="fpht" <?= $f_pht?'checked':'' ?>><label class="form-check-label small" for="fpht">Phó HT</label></div>
 </div>
 <div class="col-auto">
 <button class="btn btn-sm btn-light text-dark">Lọc</button>
@@ -253,35 +277,40 @@ Tập sự −<?= number_format(get_tap_su_reduction(),0) ?>t ·
 </div>
 <div class="card-body p-0">
 <div class="table-responsive">
-<table class="table table-sm table-hover mb-0 align-middle text-center">
-<thead>
+<table class="table table-sm table-hover mb-0 align-middle">
+<thead class="text-center">
 <tr>
 <th class="text-start">#</th>
 <th class="text-start">Họ tên</th>
-<th class="text-start" style="min-width:140px">Chuyên môn</th>
-<th title="Tổ Khoa học xã hội">KHXH</th>
-<th title="Tổ Khoa học tự nhiên">KHTN</th>
+<th class="text-start">Tổ</th>
+<th class="text-start">Chức vụ</th>
+<th>Cấp</th>
+<th class="text-start">Chuyên môn</th>
+<th title="Tổ KHXH">XH</th>
+<th title="Tổ KHTN">TN</th>
 <th>THCS</th>
 <th>THPT</th>
-<th>Tập sự</th>
-<th title="Hiệu trưởng — định mức <?= number_format(get_quota_hieu_truong(),0) ?> tiết/tuần">HT</th>
-<th title="Phó hiệu trưởng — định mức <?= number_format(get_quota_pho_hieu_truong(),0) ?> tiết/tuần">Phó HT</th>
+<th>TS</th>
+<th>HT</th>
+<th>PHT</th>
 <th>ĐM</th>
 <th></th>
 </tr>
 </thead>
 <tbody>
 <?php foreach ($filtered as $i => $t):
-    $f = get_teacher_flags($t);
+    $f = get_teacher_profile($t);
     $cm = $f['chuyen_mon'] ?? [];
     $quota = get_quota($t);
+    $to = $f['to_chuyen_mon'] ?: ($f['group'] ?? '');
+    $cap = $f['teaching_level'] ?: get_teacher_level($t);
 ?>
-<tr>
+<tr class="text-center">
 <td class="text-start"><?= $i+1 ?></td>
 <td class="text-start">
 <strong><?= e($t) ?></strong>
 <?php if (!empty($f['hieu_truong'])): ?><span class="badge bg-danger ms-1">HT</span><?php endif; ?>
-<?php if (!empty($f['pho_hieu_truong'])): ?><span class="badge bg-warning text-dark ms-1">Phó HT</span><?php endif; ?>
+<?php if (!empty($f['pho_hieu_truong'])): ?><span class="badge bg-warning text-dark ms-1">PHT</span><?php endif; ?>
 <div class="collapse mt-1" id="rn<?= $i ?>">
 <form method="post" class="input-group input-group-sm">
 <input type="hidden" name="action" value="rename">
@@ -291,21 +320,15 @@ Tập sự −<?= number_format(get_tap_su_reduction(),0) ?>t ·
 </form>
 </div>
 </td>
+<td class="text-start small"><?= $to !== '' ? e($to) : '<span class="text-muted">—</span>' ?></td>
+<td class="text-start small"><?= !empty($f['chuc_vu']) ? e($f['chuc_vu']) : '<span class="text-muted">—</span>' ?></td>
+<td class="small text-nowrap"><?= e($cap) ?></td>
 <td class="text-start p-1">
 <form method="post" id="cm<?= $i ?>">
 <input type="hidden" name="action" value="set_chuyen_mon">
 <input type="hidden" name="name" value="<?= e($t) ?>">
-<input type="hidden" name="keep_q" value="<?= e($q_search) ?>">
-<input type="hidden" name="keep_f_cm" value="<?= e($f_cm) ?>">
-<?php if ($f_khxh): ?><input type="hidden" name="keep_f_khxh" value="1"><?php endif; ?>
-<?php if ($f_khtn): ?><input type="hidden" name="keep_f_khtn" value="1"><?php endif; ?>
-<?php if ($f_thcs): ?><input type="hidden" name="keep_f_thcs" value="1"><?php endif; ?>
-<?php if ($f_thpt): ?><input type="hidden" name="keep_f_thpt" value="1"><?php endif; ?>
-<?php if ($f_tap_su): ?><input type="hidden" name="keep_f_tap_su" value="1"><?php endif; ?>
-<?php if ($f_ht): ?><input type="hidden" name="keep_f_ht" value="1"><?php endif; ?>
-<?php if ($f_pht): ?><input type="hidden" name="keep_f_pht" value="1"><?php endif; ?>
-<select name="chuyen_mon[]" class="form-select form-select-sm" multiple size="3" style="min-width:130px"
-  onchange="document.getElementById('cm<?= $i ?>').submit()" title="Ctrl+click chọn nhiều">
+<select name="chuyen_mon[]" class="form-select form-select-sm" multiple size="2" style="min-width:110px"
+  onchange="document.getElementById('cm<?= $i ?>').submit()">
 <?php foreach ($subject_names as $s): ?>
 <option value="<?= e($s) ?>" <?= in_array($s, $cm, true)?'selected':'' ?>><?= e($s) ?></option>
 <?php endforeach; ?>
@@ -313,23 +336,12 @@ Tập sự −<?= number_format(get_tap_su_reduction(),0) ?>t ·
 </form>
 <?php if ($cm): ?>
 <div class="mt-1"><?php foreach ($cm as $s): ?><span class="badge bg-primary me-1 mb-1"><?= e($s) ?></span><?php endforeach; ?></div>
-<?php else: ?>
-<span class="text-muted small">Chưa chọn</span>
 <?php endif; ?>
 </td>
 <td colspan="7" class="p-1">
 <form method="post" id="flag<?= $i ?>" class="d-contents">
 <input type="hidden" name="action" value="set_flags">
 <input type="hidden" name="name" value="<?= e($t) ?>">
-<input type="hidden" name="keep_q" value="<?= e($q_search) ?>">
-<input type="hidden" name="keep_f_cm" value="<?= e($f_cm) ?>">
-<?php if ($f_khxh): ?><input type="hidden" name="keep_f_khxh" value="1"><?php endif; ?>
-<?php if ($f_khtn): ?><input type="hidden" name="keep_f_khtn" value="1"><?php endif; ?>
-<?php if ($f_thcs): ?><input type="hidden" name="keep_f_thcs" value="1"><?php endif; ?>
-<?php if ($f_thpt): ?><input type="hidden" name="keep_f_thpt" value="1"><?php endif; ?>
-<?php if ($f_tap_su): ?><input type="hidden" name="keep_f_tap_su" value="1"><?php endif; ?>
-<?php if ($f_ht): ?><input type="hidden" name="keep_f_ht" value="1"><?php endif; ?>
-<?php if ($f_pht): ?><input type="hidden" name="keep_f_pht" value="1"><?php endif; ?>
 </form>
 <div class="d-flex justify-content-around">
 <input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="khxh" value="1" <?= $f['khxh']?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()">
@@ -337,8 +349,8 @@ Tập sự −<?= number_format(get_tap_su_reduction(),0) ?>t ·
 <input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="thcs" value="1" <?= $f['thcs']?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()">
 <input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="thpt" value="1" <?= $f['thpt']?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()">
 <input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="tap_su" value="1" <?= $f['tap_su']?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()">
-<input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="hieu_truong" value="1" <?= !empty($f['hieu_truong'])?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()" title="Hiệu trưởng — <?= number_format(get_quota_hieu_truong(),0) ?> tiết/tuần">
-<input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="pho_hieu_truong" value="1" <?= !empty($f['pho_hieu_truong'])?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()" title="Phó hiệu trưởng — <?= number_format(get_quota_pho_hieu_truong(),0) ?> tiết/tuần">
+<input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="hieu_truong" value="1" <?= !empty($f['hieu_truong'])?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()">
+<input form="flag<?= $i ?>" class="form-check-input" type="checkbox" name="pho_hieu_truong" value="1" <?= !empty($f['pho_hieu_truong'])?'checked':'' ?> onchange="document.getElementById('flag<?= $i ?>').submit()">
 </div>
 </td>
 <td>
@@ -361,15 +373,14 @@ Tập sự −<?= number_format(get_tap_su_reduction(),0) ?>t ·
 </tr>
 <?php endforeach; ?>
 <?php if (!$filtered): ?>
-<tr><td colspan="12" class="text-muted py-3">Không có giáo viên phù hợp.</td></tr>
+<tr><td colspan="15" class="text-muted py-3 text-center">Không có giáo viên phù hợp.</td></tr>
 <?php endif; ?>
 </tbody>
 </table>
 </div>
 <div class="card-footer small text-muted">
 Hiển thị <?= count($filtered) ?>/<?= count($teachers) ?> ·
-HT = <?= number_format(get_quota_hieu_truong(),0) ?> tiết/tuần · Phó HT = <?= number_format(get_quota_pho_hieu_truong(),0) ?> tiết/tuần ·
-HT ưu tiên hơn Phó HT nếu chọn cả hai
+Tổ / Chức vụ / Cấp đồng bộ từ CSDL · Phân công không bị ảnh hưởng
 </div>
 </div></div>
 </div></div>
