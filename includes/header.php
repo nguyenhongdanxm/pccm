@@ -5,7 +5,7 @@ $logged = is_logged_in();
 $active_ver = get_version(get_active_version_id());
 $tab_q = $_GET['tab'] ?? '';
 
-$pccm_pages = ['index','them','danhsach','doicheo','rasoat','sua','ketqua','giaovien','monhoc','lop','kiemnhiem','xuat_bang','thongke'];
+$pccm_pages = ['tongquan','them','danhsach','doicheo','rasoat','sua','ketqua','giaovien','monhoc','lop','kiemnhiem','xuat_bang','thongke'];
 $pccm_active = in_array($current, $pccm_pages, true);
 $kh_pages = ['kehoach'];
 $bc_pages = ['baocao'];
@@ -89,12 +89,18 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
 
 <?php if ($logged): ?>
 
+<li class="nav-item">
+  <a class="nav-link <?= $current==='index'?'active':'' ?>" href="<?= BASE_URL ?>index.php">
+    <i class="bi bi-house-door"></i> Trang chủ
+  </a>
+</li>
+
 <li class="nav-item dropdown">
   <a class="nav-link dropdown-toggle <?= $pccm_active?'active':'' ?>" href="#" data-bs-toggle="dropdown">
     <i class="bi bi-clipboard-check"></i> PCCM
   </a>
   <ul class="dropdown-menu">
-    <li><a class="dropdown-item <?= $current==='index'?'active':'' ?>" href="<?= BASE_URL ?>index.php"><i class="bi bi-grid me-1"></i> Tổng quan</a></li>
+    <li><a class="dropdown-item <?= $current==='tongquan'?'active':'' ?>" href="<?= BASE_URL ?>tongquan.php"><i class="bi bi-grid me-1"></i> Tổng quan</a></li>
     <li><a class="dropdown-item <?= in_array($current,['them','doicheo','rasoat','sua'],true)?'active':'' ?>" href="<?= BASE_URL ?>them.php"><i class="bi bi-pencil-square me-1"></i> Phân công</a></li>
     <li><a class="dropdown-item <?= $current==='danhsach'?'active':'' ?>" href="<?= BASE_URL ?>danhsach.php"><i class="bi bi-list-ul me-1"></i> Danh sách</a></li>
     <li><a class="dropdown-item <?= $current==='ketqua'?'active':'' ?>" href="<?= BASE_URL ?>ketqua.php"><i class="bi bi-folder2-open me-1"></i> Kết quả</a></li>
@@ -151,7 +157,7 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
 </div></div></nav>
 <div class="container pb-5">
 <?php show_flash(); ?>
-<?php if ($logged && $active_ver && in_array($current, ['them','danhsach','index','sua','doicheo','rasoat'], true)): ?>
+<?php if ($logged && $active_ver && in_array($current, ['them','danhsach','tongquan','sua','doicheo','rasoat'], true)): ?>
 <div class="version-bar">
     <i class="bi bi-folder2-open"></i>
     Đang làm việc trên: <strong><?= e($active_ver['name']) ?></strong>
