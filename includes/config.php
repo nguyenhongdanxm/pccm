@@ -1,7 +1,17 @@
 <?php
 define('BASE_PATH', dirname(__DIR__));
 define('DATA_PATH', BASE_PATH . '/data');
-define('BASE_URL', '/pccm/');
+/* Deploy độc lập: /pccm/ — Deploy trong CDS: /chuyenmon/ */
+if (!defined('BASE_URL')) {
+    $script = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
+    if (strpos($script, '/chuyenmon') !== false) {
+        define('BASE_URL', '/chuyenmon/');
+    } elseif (strpos($script, '/pccm') !== false) {
+        define('BASE_URL', '/pccm/');
+    } else {
+        define('BASE_URL', '/chuyenmon/');
+    }
+}
 
 if (!is_dir(DATA_PATH)) mkdir(DATA_PATH, 0755, true);
 
