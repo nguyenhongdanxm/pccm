@@ -53,7 +53,6 @@ function cm_doc_delete($id) {
     cm_docs_save_all($rows);
 }
 
-/** Xử lý upload file (nếu có) → trả path tương đối trong data/uploads */
 function cm_handle_upload($field = 'file') {
     if (empty($_FILES[$field]['tmp_name']) || !is_uploaded_file($_FILES[$field]['tmp_name'])) {
         return '';
@@ -73,4 +72,127 @@ function cm_file_url($rel) {
     if (!$rel) return '';
     if (preg_match('#^https?://#i', $rel)) return $rel;
     return BASE_URL . 'data/' . ltrim($rel, '/');
+}
+
+function cm_section_meta($section) {
+    static $map = [
+        'kh_vanban' => ['Kế hoạch · Văn bản', 'kehoach.php?tab=vanban', 'bi-file-earmark-pdf', 'kh'],
+        'kh_thongbao' => ['Kế hoạch · Thông báo', 'kehoach.php?tab=thongbao', 'bi-megaphone', 'kh'],
+        'kh_chitieu' => ['Kế hoạch · Chỉ tiêu', 'kehoach.php?tab=chitieu', 'bi-bullseye', 'kh'],
+        'bc_dinhky' => ['Báo cáo định kỳ', 'baocao.php?tab=dinhky', 'bi-calendar-month', 'bc'],
+        'bc_thang' => ['Báo cáo định kỳ', 'baocao.php?tab=dinhky', 'bi-calendar-month', 'bc'],
+        'bc_tiendo' => ['Tiến độ chương trình', 'baocao.php?tab=tiendo', 'bi-graph-up', 'bc'],
+        'bc_dugio' => ['Dự giờ', 'baocao.php?tab=dugio', 'bi-eye', 'bc'],
+        'bc_kythi' => ['Kết quả cuộc thi', 'baocao.php?tab=kythi', 'bi-trophy', 'bc'],
+    ];
+    return $map[$section] ?? ['Khác', 'index.php', 'bi-folder', 'other'];
+}
+
+/**
+ * Tính hạn hiệu lực:
+ * - due_date (YYYY-MM-DD) ưu tiên
+ * - hoặc cửa sổ hàng tháng day_from..day_to (vd 22–25)
+ */
+function cm_resolve_deadline(array $row, $today = null) {
+    $today = $today ?: date('Y-m-d');
+    $tsToday = strtotime($today . ' 12:00:00');
+
+    if (!empty($row['due_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $row['due_date'])) {
+        $due = $row['due_date'];
+        $days = (int) round((strtotime($due . ' 12:00:00') - $tsToday) / 86400);
+        return [
+            'due_date' => $due,
+            'start_date' => $row['date'] ?? $due,
+            'days_left' => $days,
+            'window' => '',
+            'recurring' => false,
+            'status' => $days < 0 ? 'overdue' : ($days <= 5 ? 'urgent' : ($days <= 14 ? 'soon' : 'ok')),
+        ];
+    }
+
+    $from = isset($row['day_from']) && $row['day_from'] !== '' ? (int)$row['day_from'] : 0;
+    $to = isset($row['day_to']) && $row['day_to'] !== '' ? (int)$row['day_to'] : 0;
+    if ($from >= 1 && $to >= 1 && $from <= 31 && $to <= 31) {
+        if ($to < $from) { $tmp = $from; $from = $to; $to = $tmp; }
+        $y = (int)date('Y', $tsToday);
+        $m = (int)date('n', $tsToday);
+        $d = (int)date('j', $tsToday);
+
+        // Kỳ hiện tại hoặc kỳ tiếp theo
+        $endThis = strtotime(sprintf('%04d-%02d-%02d 12:00:00', $y, $m, min($to, (int)date('t', $tsToday))));
+        $startThis = strtotime(sprintf('%04d-%02d-%02d 12:00:00', $y, $m, min($from, (int)date('t', $tsToday))));
+
+        if ($d > $to) {
+            // sang tháng sau
+            $nm = $m === 12 ? 1 : $m + 1;
+            $ny = $m === 12 ? $y + 1 : $y;
+            $dim = (int)date('t', strtotime("$ny-$nm-01"));
+            $startThis = strtotime(sprintf('%04d-%02d-%02d 12:00:00', $ny, $nm, min($from, $dim)));
+            $endThis = strtotime(sprintf('%04d-%02d-%02d 12:00:00', $ny, $nm, min($to, $dim)));
+        }
+
+        $due = date('Y-m-d', $endThis);
+        $start = date('Y-m-d', $startThis);
+        $days = (int) round(($endThis - $tsToday) / 86400);
+        $inWindow = ($tsToday >= $startThis && $tsToday <= $endThis);
+
+        return [
+            'due_date' => $due,
+            'start_date' => $start,
+            'days_left' => $days,
+            'window' => $from . '–' . $to . ' hàng tháng',
+            'recurring' => true,
+            'in_window' => $inWindow,
+            'status' => $days < 0 ? 'overdue' : ($inWindow || $days <= 5 ? 'urgent' : ($days <= 14 ? 'soon' : 'ok')),
+        ];
+    }
+
+    // fallback: dùng date sự kiện
+    if (!empty($row['date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $row['date'])) {
+        $due = $row['date'];
+        $days = (int) round((strtotime($due . ' 12:00:00') - $tsToday) / 86400);
+        return [
+            'due_date' => $due,
+            'start_date' => $due,
+            'days_left' => $days,
+            'window' => '',
+            'recurring' => false,
+            'status' => $days < 0 ? 'past' : ($days <= 5 ? 'urgent' : ($days <= 14 ? 'soon' : 'ok')),
+        ];
+    }
+
+    return null;
+}
+
+function cm_enrich_doc(array $row) {
+    $meta = cm_section_meta($row['section'] ?? '');
+    $dl = cm_resolve_deadline($row);
+    $row['_label'] = $meta[0];
+    $row['_href'] = BASE_URL . $meta[1];
+    $row['_icon'] = $meta[2];
+    $row['_group'] = $meta[3];
+    $row['_deadline'] = $dl;
+    return $row;
+}
+
+/** Feed dashboard: mọi mục có ngày / hạn */
+function cm_dashboard_items() {
+    $out = [];
+    foreach (cm_docs_all() as $r) {
+        if (($r['kind'] ?? '') === 'result') continue; // kết quả con không hiện riêng
+        $out[] = cm_enrich_doc($r);
+    }
+    return $out;
+}
+
+function cm_week_bounds($offsetWeeks = 0) {
+    $ts = strtotime('monday this week') + $offsetWeeks * 7 * 86400;
+    $start = date('Y-m-d', $ts);
+    $end = date('Y-m-d', $ts + 6 * 86400);
+    return [$start, $end];
+}
+
+function cm_in_range($date, $start, $end) {
+    if (!$date) return false;
+    return $date >= $start && $date <= $end;
 }
