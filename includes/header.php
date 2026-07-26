@@ -3,12 +3,12 @@ require_once __DIR__ . '/functions.php';
 $current = basename($_SERVER['PHP_SELF'], '.php');
 $logged = is_logged_in();
 $active_ver = get_version(get_active_version_id());
+$tab_q = $_GET['tab'] ?? '';
 
-$pccm_pages = ['index','them','danhsach','doicheo','rasoat','sua','ketqua','giaovien','monhoc','lop','kiemnhiem','xuat_bang'];
+$pccm_pages = ['index','them','danhsach','doicheo','rasoat','sua','ketqua','giaovien','monhoc','lop','kiemnhiem','xuat_bang','thongke'];
 $pccm_active = in_array($current, $pccm_pages, true);
 $kh_pages = ['kehoach'];
 $bc_pages = ['baocao'];
-$tk_pages = ['thongke'];
 ?>
 <!DOCTYPE html>
 <html lang="vi">
@@ -25,7 +25,7 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
 .navbar{background:var(--primary)!important}
 .navbar .navbar-brand,.navbar .nav-link{color:#fff!important}
 .navbar .nav-link:hover,.navbar .nav-link.active{color:#ffc107!important}
-.navbar .dropdown-menu{border:none;box-shadow:0 8px 24px rgba(0,0,0,.12);border-radius:10px;min-width:220px}
+.navbar .dropdown-menu{border:none;box-shadow:0 8px 24px rgba(0,0,0,.12);border-radius:10px;min-width:230px}
 .navbar .dropdown-item{font-weight:500;padding:.5rem 1rem}
 .navbar .dropdown-item:hover{background:#e8f0fe;color:var(--primary)}
 .navbar .dropdown-item.active{background:var(--primary);color:#fff}
@@ -89,7 +89,6 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
 
 <?php if ($logged): ?>
 
-<!-- PCCM: phân công chuyên môn -->
 <li class="nav-item dropdown">
   <a class="nav-link dropdown-toggle <?= $pccm_active?'active':'' ?>" href="#" data-bs-toggle="dropdown">
     <i class="bi bi-clipboard-check"></i> PCCM
@@ -99,6 +98,7 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
     <li><a class="dropdown-item <?= in_array($current,['them','doicheo','rasoat','sua'],true)?'active':'' ?>" href="<?= BASE_URL ?>them.php"><i class="bi bi-pencil-square me-1"></i> Phân công</a></li>
     <li><a class="dropdown-item <?= $current==='danhsach'?'active':'' ?>" href="<?= BASE_URL ?>danhsach.php"><i class="bi bi-list-ul me-1"></i> Danh sách</a></li>
     <li><a class="dropdown-item <?= $current==='ketqua'?'active':'' ?>" href="<?= BASE_URL ?>ketqua.php"><i class="bi bi-folder2-open me-1"></i> Kết quả</a></li>
+    <li><a class="dropdown-item <?= $current==='thongke'?'active':'' ?>" href="<?= BASE_URL ?>thongke.php"><i class="bi bi-bar-chart-line me-1"></i> Thống kê PCCM</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header">Nhập liệu</h6></li>
     <li><a class="dropdown-item <?= $current==='giaovien'?'active':'' ?>" href="<?= BASE_URL ?>giaovien.php">Giáo viên</a></li>
@@ -106,44 +106,31 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
     <li><a class="dropdown-item <?= $current==='lop'?'active':'' ?>" href="<?= BASE_URL ?>lop.php">Lớp</a></li>
     <li><a class="dropdown-item <?= $current==='kiemnhiem'?'active':'' ?>" href="<?= BASE_URL ?>kiemnhiem.php">Kiêm nhiệm & số tiết</a></li>
     <li><hr class="dropdown-divider"></li>
-    <li><a class="dropdown-item" href="<?= BASE_URL ?>xuat_bang.php"><i class="bi bi-printer me-1"></i> Xuất bảng</a></li>
+    <li><a class="dropdown-item <?= $current==='xuat_bang'?'active':'' ?>" href="<?= BASE_URL ?>xuat_bang.php"><i class="bi bi-printer me-1"></i> Xuất bảng</a></li>
   </ul>
 </li>
 
-<!-- Kế hoạch -->
 <li class="nav-item dropdown">
   <a class="nav-link dropdown-toggle <?= in_array($current,$kh_pages,true)?'active':'' ?>" href="#" data-bs-toggle="dropdown">
     <i class="bi bi-calendar2-week"></i> Kế hoạch
   </a>
   <ul class="dropdown-menu">
-    <li><a class="dropdown-item" href="<?= BASE_URL ?>kehoach.php?tab=vanban">Văn bản kế hoạch</a></li>
-    <li><a class="dropdown-item" href="<?= BASE_URL ?>kehoach.php?tab=thongbao">Thông báo chuyên môn</a></li>
-    <li><a class="dropdown-item" href="<?= BASE_URL ?>kehoach.php?tab=chitieu">Chỉ tiêu</a></li>
+    <li><a class="dropdown-item <?= ($current==='kehoach' && ($tab_q===''||$tab_q==='vanban'))?'active':'' ?>" href="<?= BASE_URL ?>kehoach.php?tab=vanban">Văn bản kế hoạch</a></li>
+    <li><a class="dropdown-item <?= ($current==='kehoach' && $tab_q==='thongbao')?'active':'' ?>" href="<?= BASE_URL ?>kehoach.php?tab=thongbao">Thông báo chuyên môn</a></li>
+    <li><a class="dropdown-item <?= ($current==='kehoach' && $tab_q==='chitieu')?'active':'' ?>" href="<?= BASE_URL ?>kehoach.php?tab=chitieu">Chỉ tiêu</a></li>
   </ul>
 </li>
 
-<!-- Báo cáo -->
 <li class="nav-item dropdown">
   <a class="nav-link dropdown-toggle <?= in_array($current,$bc_pages,true)?'active':'' ?>" href="#" data-bs-toggle="dropdown">
     <i class="bi bi-file-earmark-text"></i> Báo cáo
   </a>
   <ul class="dropdown-menu">
-    <li><a class="dropdown-item" href="<?= BASE_URL ?>baocao.php?tab=thang">Báo cáo tháng</a></li>
-    <li><a class="dropdown-item" href="<?= BASE_URL ?>baocao.php?tab=tiendo">Tiến độ chương trình</a></li>
-    <li><a class="dropdown-item" href="<?= BASE_URL ?>baocao.php?tab=ncbh">NCBH</a></li>
-    <li><a class="dropdown-item" href="<?= BASE_URL ?>baocao.php?tab=steam">STEAM</a></li>
-    <li><a class="dropdown-item" href="<?= BASE_URL ?>baocao.php?tab=khkt">KHKT</a></li>
-    <li><a class="dropdown-item" href="<?= BASE_URL ?>baocao.php?tab=clb">CLB</a></li>
-    <li><a class="dropdown-item" href="<?= BASE_URL ?>baocao.php?tab=dugio">Dự giờ</a></li>
-    <li><a class="dropdown-item" href="<?= BASE_URL ?>baocao.php?tab=kythi">Kỳ thi / cuộc thi GV–HS</a></li>
+    <li><a class="dropdown-item <?= ($current==='baocao' && ($tab_q===''||$tab_q==='dinhky'))?'active':'' ?>" href="<?= BASE_URL ?>baocao.php?tab=dinhky">Báo cáo định kỳ</a></li>
+    <li><a class="dropdown-item <?= ($current==='baocao' && $tab_q==='tiendo')?'active':'' ?>" href="<?= BASE_URL ?>baocao.php?tab=tiendo">Tiến độ chương trình</a></li>
+    <li><a class="dropdown-item <?= ($current==='baocao' && $tab_q==='dugio')?'active':'' ?>" href="<?= BASE_URL ?>baocao.php?tab=dugio">Dự giờ</a></li>
+    <li><a class="dropdown-item <?= ($current==='baocao' && $tab_q==='kythi')?'active':'' ?>" href="<?= BASE_URL ?>baocao.php?tab=kythi">Kết quả cuộc thi</a></li>
   </ul>
-</li>
-
-<!-- Thống kê -->
-<li class="nav-item">
-  <a class="nav-link <?= in_array($current,$tk_pages,true)?'active':'' ?>" href="<?= BASE_URL ?>thongke.php">
-    <i class="bi bi-bar-chart-line"></i> Thống kê
-  </a>
 </li>
 
 <?php else: ?>
