@@ -58,7 +58,7 @@ require_once 'includes/header.php';
 
 <div class="row g-3">
   <div class="col-lg-4">
-    <div class="card"><div class="card-header">Thêm / cập nhật</div><div class="card-body">
+    <div class="card"><div class="card-header">Thêm / cập nhật — <?= e($tabs[$tab][0]) ?></div><div class="card-body">
       <form method="post" enctype="multipart/form-data">
         <input type="hidden" name="action" value="save">
         <input type="hidden" name="id" id="doc_id" value="">
@@ -89,12 +89,10 @@ require_once 'includes/header.php';
     </div></div>
   </div>
   <div class="col-lg-8">
-    <div class="card"><div class="card-header d-flex justify-content-between">
-      <span><?= e($tabs[$tab][0]) ?> (<?= count($items) ?>)</span>
-    </div>
+    <div class="card"><div class="card-header"><?= e($tabs[$tab][0]) ?> (<?= count($items) ?>)</div>
     <div class="table-responsive">
       <table class="table table-sm table-hover mb-0 align-middle">
-        <thead><tr><th>Ngày</th><th>Tiêu đề</th><th>Tài liệu</th><th></th></tr></thead>
+        <thead><tr><th>Ngày</th><th>Tiêu đề</th><th>Tài liệu</th><th style="min-width:140px"></th></tr></thead>
         <tbody>
         <?php if (!$items): ?>
           <tr><td colspan="4" class="text-muted text-center py-4">Chưa có mục nào.</td></tr>
@@ -114,6 +112,7 @@ require_once 'includes/header.php';
               <?php if (empty($it['link']) && empty($it['file_path'])): ?>—<?php endif; ?>
             </td>
             <td class="text-nowrap">
+              <button type="button" class="btn btn-sm btn-outline-success" title="Xem" onclick='viewDoc(<?= json_encode($it, JSON_UNESCAPED_UNICODE) ?>)'><i class="bi bi-eye"></i> Xem</button>
               <button type="button" class="btn btn-sm btn-outline-primary" onclick='editDoc(<?= json_encode($it, JSON_UNESCAPED_UNICODE) ?>)'><i class="bi bi-pencil"></i></button>
               <form method="post" class="d-inline" onsubmit="return confirm('Xóa?')">
                 <input type="hidden" name="action" value="delete">
@@ -128,6 +127,16 @@ require_once 'includes/header.php';
     </div></div>
   </div>
 </div>
+
+<div class="modal fade" id="viewModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title" id="viewTitle">Xem văn bản</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <div class="small text-muted mb-2" id="viewMeta"></div>
+    <div id="viewContent" style="white-space:pre-wrap"></div>
+    <div class="mt-3" id="viewLinks"></div>
+  </div>
+  <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button></div>
+</div></div></div>
 
 <script>
 function resetForm(){
@@ -146,6 +155,16 @@ function editDoc(it){
   document.getElementById('doc_content').value=it.content||'';
   document.getElementById('doc_link').value=it.link||'';
   window.scrollTo({top:0,behavior:'smooth'});
+}
+function viewDoc(it){
+  document.getElementById('viewTitle').textContent=it.title||'Xem văn bản';
+  document.getElementById('viewMeta').textContent=(it.date||'')+(it.by?' · '+it.by:'');
+  document.getElementById('viewContent').textContent=it.content||'(Không có nội dung chữ)';
+  var links='';
+  if(it.link) links+='<a class="btn btn-sm btn-outline-primary me-2" target="_blank" href="'+it.link+'"><i class="bi bi-link-45deg"></i> Mở link</a>';
+  if(it.file_path) links+='<a class="btn btn-sm btn-outline-success" target="_blank" href="<?= BASE_URL ?>data/'+it.file_path+'"><i class="bi bi-download"></i> Tải / xem file</a>';
+  document.getElementById('viewLinks').innerHTML=links||'<span class="text-muted">Không có file hoặc link đính kèm</span>';
+  new bootstrap.Modal(document.getElementById('viewModal')).show();
 }
 </script>
 <?php require_once 'includes/footer.php'; ?>
