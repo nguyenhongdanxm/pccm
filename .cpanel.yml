@@ -1,5 +1,5 @@
 ---
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/capnachi/noitruxinman.edu.vn/pccm/
+    - export DEPLOYPATH=/home/capnachi/cds.noitruxinman.edu.vn/chuyenmon/
     - /bin/cp -R * $DEPLOYPATH
