@@ -151,7 +151,7 @@ body{background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;color:#21252
   <?php if ($logged): ?>
   <a href="<?= BASE_URL ?>logout.php" class="btn btn-warning btn-sm text-dark fw-semibold"><i class="bi bi-box-arrow-right"></i> Đăng xuất</a>
   <?php else: ?>
-  <a href="<?= BASE_URL ?>login.php" class="btn btn-outline-light btn-sm"><i class="bi bi-box-arrow-in-right"></i> Đăng nhập</a>
+  <a href="/login.php?next=<?= urlencode(BASE_URL . 'index.php') ?>" class="btn btn-outline-light btn-sm"><i class="bi bi-box-arrow-in-right"></i> Đăng nhập</a>
   <?php endif; ?>
 </div>
 </div></div></nav>

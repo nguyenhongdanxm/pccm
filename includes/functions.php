@@ -1,9 +1,6 @@
 <?php
 require_once __DIR__ . '/config.php';
 
-define('ADMIN_USER', 'admin');
-define('ADMIN_PASS', 'Xinman@2021');
-
 if (!defined('TAP_SU_QUOTA_REDUCTION')) define('TAP_SU_QUOTA_REDUCTION', 2);
 if (!defined('QUOTA_HIEU_TRUONG')) define('QUOTA_HIEU_TRUONG', 2);
 if (!defined('QUOTA_PHO_HIEU_TRUONG')) define('QUOTA_PHO_HIEU_TRUONG', 4);
@@ -520,18 +517,37 @@ function show_flash() {
 }
 
 function e($str) { return htmlspecialchars($str ?? '', ENT_QUOTES, 'UTF-8'); }
-function is_logged_in() { return !empty($_SESSION['pccm_admin']); }
+
+function cds_user() {
+    return is_array($_SESSION['cds_user'] ?? null) ? $_SESSION['cds_user'] : null;
+}
+
+function is_logged_in() {
+    $user = cds_user();
+    if (!$user) return false;
+
+    $role = $user['role'] ?? '';
+    $level = $user['modules']['chuyenmon'] ?? 'none';
+    $perms = is_array($user['perms'] ?? null) ? $user['perms'] : [];
+
+    return !empty($_SESSION['pccm_admin'])
+        || in_array($role, ['admin', 'bgh', 'totruong'], true)
+        || in_array($level, ['edit', 'admin'], true)
+        || in_array('cm.pccm', $perms, true);
+}
+
 function require_login() {
+    if (!cds_user()) {
+        $next = $_SERVER['REQUEST_URI'] ?? (BASE_URL . 'index.php');
+        header('Location: /login.php?next=' . urlencode($next));
+        exit;
+    }
+
     if (!is_logged_in()) {
-        flash('Vui lòng đăng nhập để sử dụng chức năng này.', 'warning');
-        header('Location: ' . BASE_URL . 'login.php'); exit;
+        http_response_code(403);
+        exit('Tài khoản chưa được cấp quyền sử dụng module Chuyên môn.');
     }
 }
-function attempt_login($user, $pass) {
-    if ($user === ADMIN_USER && $pass === ADMIN_PASS) { $_SESSION['pccm_admin'] = true; return true; }
-    return false;
-}
-function logout() { unset($_SESSION['pccm_admin']); session_destroy(); }
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 init_data();
