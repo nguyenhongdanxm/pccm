@@ -69,6 +69,25 @@ require_once 'includes/header.php';
   <?php endforeach; ?>
 </ul>
 
+<?php if ($tab === 'chitieu'): ?>
+<style>
+.news-list{display:grid;gap:.85rem;margin-bottom:1.25rem}.news-item{display:flex;gap:1rem;align-items:flex-start;padding:1rem 1.15rem;border:1px solid #dfe7ef;border-radius:14px;background:#fff;box-shadow:0 3px 12px rgba(15,23,42,.05)}.news-date{flex:0 0 62px;padding:.55rem .35rem;border-radius:11px;background:#e8f0fe;color:#1f4e79;text-align:center}.news-date strong,.news-date span{display:block}.news-date strong{font-size:1.25rem}.news-copy{min-width:0}.news-copy a{font-size:1.06rem;font-weight:750;color:#1f4e79;text-decoration:none}.news-copy a:hover{text-decoration:underline}.news-copy p{margin:.35rem 0 0;color:#64748b}.article-admin{margin-top:1rem}.article-admin>summary{display:inline-flex;align-items:center;gap:.45rem;padding:.65rem 1rem;border:1px solid #b8c8d8;border-radius:10px;background:#fff;color:#1f4e79;font-weight:700;cursor:pointer;list-style:none}.article-admin[open]>summary{margin-bottom:1rem;background:#e8f0fe}
+</style>
+<section>
+  <div class="d-flex justify-content-between align-items-center mb-3"><div><h4 class="mb-1"><i class="bi bi-newspaper"></i> Bài viết chỉ tiêu chuyên môn</h4><div class="text-muted small">Chọn tiêu đề để đọc nội dung và mở văn bản liên quan.</div></div><span class="badge bg-primary rounded-pill"><?= count($items) ?> bài</span></div>
+  <div class="news-list">
+    <?php foreach ($items as $it): $ts = !empty($it['date']) ? strtotime($it['date']) : time(); ?>
+      <article class="news-item">
+        <time class="news-date"><strong><?= date('d', $ts) ?></strong><span>Th <?= date('m', $ts) ?></span></time>
+        <div class="news-copy"><a href="<?= BASE_URL ?>baiviet.php?id=<?= urlencode($it['id'] ?? '') ?>"><?= e($it['title'] ?? '') ?></a><p><?= e(mb_strimwidth($it['content'] ?? '', 0, 170, '…', 'UTF-8')) ?></p></div>
+      </article>
+    <?php endforeach; ?>
+    <?php if (!$items): ?><div class="alert alert-light border text-muted mb-0">Chưa có bài viết chỉ tiêu chuyên môn.</div><?php endif; ?>
+  </div>
+</section>
+<details class="article-admin"><summary><i class="bi bi-pencil-square"></i> Quản lý bài viết</summary>
+<?php endif; ?>
+
 <div class="row g-3">
   <div class="col-lg-4">
     <div class="card"><div class="card-header">Thêm / cập nhật — <?= e($tabs[$tab][0]) ?></div><div class="card-body">
@@ -188,6 +207,7 @@ require_once 'includes/header.php';
     </div></div>
   </div>
 </div>
+<?php if ($tab === 'chitieu'): ?></details><?php endif; ?>
 
 <div class="modal fade" id="viewModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
   <div class="modal-header"><h5 class="modal-title" id="viewTitle">Xem</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
