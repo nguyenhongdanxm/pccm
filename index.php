@@ -3,6 +3,7 @@ $page_title = 'Trang chủ';
 require_once 'includes/functions.php';
 require_once 'includes/features.php';
 require_once 'includes/cm_docs.php';
+require_login();
 $app = get_app_info();
 $features = get_app_features();
 
